@@ -1,0 +1,4 @@
+name: "demeter-admin-panel"
+paths-ignore:
+  - dist
+  - coverage

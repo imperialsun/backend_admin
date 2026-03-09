@@ -1,0 +1,52 @@
+@import "tailwindcss";
+
+@theme {
+  --color-background: hsl(var(--background));
+  --color-foreground: hsl(var(--foreground));
+  --color-card: hsl(var(--card));
+  --color-primary: hsl(var(--primary));
+  --color-primary-foreground: hsl(var(--primary-foreground));
+  --color-muted: hsl(var(--muted));
+  --color-muted-foreground: hsl(var(--muted-foreground));
+  --color-border: hsl(var(--border));
+  --color-destructive: hsl(var(--destructive));
+  --color-destructive-foreground: hsl(var(--destructive-foreground));
+}
+
+@layer base {
+  :root {
+    --background: 38 30% 97%;
+    --foreground: 215 28% 16%;
+    --card: 0 0% 100%;
+    --primary: 24 92% 44%;
+    --primary-foreground: 34 100% 98%;
+    --muted: 30 22% 93%;
+    --muted-foreground: 218 11% 42%;
+    --border: 28 20% 85%;
+    --destructive: 0 78% 56%;
+    --destructive-foreground: 0 0% 100%;
+  }
+
+  * {
+    @apply border-border;
+  }
+
+  body {
+    @apply bg-background text-foreground antialiased;
+    font-family: "Aptos", "Segoe UI", "Helvetica Neue", sans-serif;
+    background-image:
+      radial-gradient(circle at top left, rgba(222, 102, 12, 0.12), transparent 28%),
+      linear-gradient(180deg, rgba(250, 246, 241, 0.96) 0%, rgba(245, 239, 232, 0.92) 100%);
+  }
+
+  #root {
+    min-height: 100vh;
+  }
+
+  input,
+  select,
+  textarea,
+  button {
+    font: inherit;
+  }
+}

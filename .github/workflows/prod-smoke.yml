@@ -1,0 +1,109 @@
+name: Prod Smoke
+
+on:
+  pull_request:
+  push:
+    branches:
+      - main
+      - master
+  schedule:
+    - cron: "17 3 * * 1"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  prod-smoke:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v6
+
+      - name: Build admin image
+        run: docker build -t demeter-admin-panel:smoke .
+
+      - name: Start admin container
+        run: |
+          docker run -d --rm --name demeter-admin-panel-smoke \
+            -p 4173:8080 \
+            -e BACKEND_BASE_URL=https://api.example.test/api/v1 \
+            demeter-admin-panel:smoke
+
+      - name: Wait for app availability
+        run: |
+          set -euo pipefail
+          for i in $(seq 1 30); do
+            if curl -fsS http://localhost:4173/index.html >/dev/null; then
+              exit 0
+            fi
+            sleep 2
+          done
+          echo "admin panel failed to start"
+          exit 1
+
+      - name: Verify SPA fallback, runtime config and security headers
+        run: |
+          set -euo pipefail
+
+          assert_header() {
+            local url="$1"
+            local expected="$2"
+            local headers
+            headers="$(curl -fsSI "$url" | tr -d '\r')"
+            if ! echo "$headers" | grep -iF "$expected" >/dev/null; then
+              echo "Missing header '$expected' on $url"
+              echo "$headers"
+              exit 1
+            fi
+          }
+
+          index_status="$(curl -s -o /dev/null -w "%{http_code}" http://localhost:4173/index.html)"
+          route_status="$(curl -s -o /dev/null -w "%{http_code}" http://localhost:4173/users)"
+          runtime_config="$(curl -fsS http://localhost:4173/runtime-config.js)"
+          test "$index_status" = "200"
+          test "$route_status" = "200"
+          echo "$runtime_config" | grep 'https://api.example.test/api/v1'
+
+          assert_header "http://localhost:4173/index.html" "Content-Security-Policy:"
+          assert_header "http://localhost:4173/index.html" "X-Frame-Options: DENY"
+          assert_header "http://localhost:4173/index.html" "X-Content-Type-Options: nosniff"
+          assert_header "http://localhost:4173/index.html" "Referrer-Policy: no-referrer"
+          assert_header "http://localhost:4173/index.html" "Permissions-Policy:"
+          assert_header "http://localhost:4173/index.html" "Strict-Transport-Security:"
+          assert_header "http://localhost:4173/runtime-config.js" "Cache-Control: no-store"
+
+      - name: Verify immutable asset caching
+        run: |
+          set -euo pipefail
+
+          assert_header() {
+            local url="$1"
+            local expected="$2"
+            local headers
+            headers="$(curl -fsSI "$url" | tr -d '\r')"
+            if ! echo "$headers" | grep -iF "$expected" >/dev/null; then
+              echo "Missing header '$expected' on $url"
+              echo "$headers"
+              exit 1
+            fi
+          }
+
+          index_html="$(curl -fsS http://localhost:4173/index.html)"
+          asset_path="$(echo "$index_html" | grep -oE "/assets/[^\"'<> ]+\\.js" | head -n1 || true)"
+          if [ -z "$asset_path" ]; then
+            echo "Unable to find a hashed JS asset in index.html"
+            exit 1
+          fi
+
+          assert_header "http://localhost:4173${asset_path}" "Cache-Control: public, max-age=31536000, immutable"
+
+      - name: Dump logs on failure
+        if: failure()
+        run: docker logs demeter-admin-panel-smoke
+
+      - name: Teardown
+        if: always()
+        run: docker rm -f demeter-admin-panel-smoke || true
