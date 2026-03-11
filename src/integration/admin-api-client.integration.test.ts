@@ -33,7 +33,7 @@ import {
 } from "@/test/integration/backend-harness"
 
 describe("admin api/client integration", () => {
-  let backend: RealBackendHandle
+  let backend: RealBackendHandle | undefined
   let transport: CookieJarTransport
   let restoreFetch: (() => void) | null = null
 
@@ -42,10 +42,13 @@ describe("admin api/client integration", () => {
   })
 
   afterAll(async () => {
-    await backend.stop()
+    await backend?.stop()
   })
 
   beforeEach(() => {
+    if (!backend) {
+      throw new Error("[integration] backend failed to start during setup")
+    }
     backend.configureRuntime()
     transport = backend.createTransport()
     restoreFetch = transport.installAsGlobalFetch()

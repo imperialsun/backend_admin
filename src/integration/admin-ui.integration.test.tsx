@@ -74,7 +74,7 @@ function RealSessionHarness(props: { children: ReactNode; initialSession?: Admin
 }
 
 describe("admin ui smoke integration", () => {
-  let backend: RealBackendHandle
+  let backend: RealBackendHandle | undefined
   let transport: CookieJarTransport
   let restoreFetch: (() => void) | null = null
 
@@ -83,10 +83,13 @@ describe("admin ui smoke integration", () => {
   })
 
   afterAll(async () => {
-    await backend.stop()
+    await backend?.stop()
   })
 
   beforeEach(() => {
+    if (!backend) {
+      throw new Error("[integration] backend failed to start during setup")
+    }
     backend.configureRuntime()
     transport = backend.createTransport()
     restoreFetch = transport.installAsGlobalFetch()
