@@ -23,7 +23,7 @@ jobs:
         uses: actions/checkout@v6
 
       - name: Build admin image
-        run: docker build -t demeter-admin-panel:smoke .
+        run: docker build --pull -t demeter-admin-panel:smoke .
 
       - name: Start admin container
         run: |
