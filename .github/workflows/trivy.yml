@@ -53,7 +53,7 @@ jobs:
         uses: actions/checkout@v6
 
       - name: Build Docker image
-        run: docker build -t demeter-admin-panel:ci .
+        run: docker build --pull -t demeter-admin-panel:ci .
 
       - name: Run Trivy image scan
         uses: aquasecurity/trivy-action@0.35.0

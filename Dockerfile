@@ -12,6 +12,8 @@ FROM nginx:1.29.6-alpine3.23
 
 ENV BACKEND_BASE_URL=http://localhost:8080/api/v1
 
+RUN apk add --no-cache --upgrade zlib
+
 COPY docker/nginx/admin.conf /etc/nginx/conf.d/default.conf
 COPY docker/nginx/security-headers.inc /etc/nginx/conf.d/security-headers.inc
 COPY docker/nginx/entrypoint.sh /entrypoint.sh
