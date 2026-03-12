@@ -1,4 +1,4 @@
-FROM node:25-alpine AS build
+FROM node:25.6.1-alpine3.23 AS build
 
 WORKDIR /app
 
@@ -8,7 +8,7 @@ RUN npm ci
 COPY . .
 RUN npm run build
 
-FROM nginx:1.29-alpine
+FROM nginx:1.29.6-alpine3.23
 
 ENV BACKEND_BASE_URL=http://localhost:8080/api/v1
 
