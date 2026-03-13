@@ -8,6 +8,7 @@ import {
   adminRefresh,
   createOrganization,
   createUser,
+  deleteUser,
   fetchActivitySummary,
   fetchOrganizations,
   fetchPermissionsCatalog,
@@ -239,6 +240,19 @@ describe("admin api/client integration", () => {
     expect(summary.byUser.some((item) => item.email === updatedUser.email)).toBe(true)
     expect(summary.range.from).toBe(today)
     expect(summary.range.to).toBe(today)
+
+    await updateUserOrgRoles(createdUser.id, ["org_member"])
+    await deleteUser(createdUser.id)
+
+    const usersAfterDelete = await fetchUsersByOrganization(targetOrganization.id)
+    expect(usersAfterDelete.some((user) => user.id === createdUser.id)).toBe(false)
+
+    await expect(
+      loginAppDirect(backend.createTransport(), {
+        email: updatedUser.email,
+        password: "ResetPass123!",
+      }),
+    ).rejects.toThrow(/401/)
 
     expect(adminSession.organization.id).not.toBe("")
   })

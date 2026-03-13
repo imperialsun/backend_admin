@@ -4,11 +4,13 @@ import { beforeEach, describe, expect, it, vi } from "vitest"
 
 const userPageMocks = vi.hoisted(() => ({
   createUser: vi.fn(),
+  deleteUser: vi.fn(),
   fetchOrganizations: vi.fn(),
   fetchPermissionsCatalog: vi.fn(),
   fetchRolesCatalog: vi.fn(),
   fetchUserAccess: vi.fn(),
   fetchUsersByOrganization: vi.fn(),
+  sendUserPasswordResetEmail: vi.fn(),
   updateUser: vi.fn(),
   updateUserEntitlements: vi.fn(),
   updateUserGlobalRoles: vi.fn(),
@@ -19,11 +21,13 @@ const userPageMocks = vi.hoisted(() => ({
 
 vi.mock("@/lib/admin-client", () => ({
   createUser: userPageMocks.createUser,
+  deleteUser: userPageMocks.deleteUser,
   fetchOrganizations: userPageMocks.fetchOrganizations,
   fetchPermissionsCatalog: userPageMocks.fetchPermissionsCatalog,
   fetchRolesCatalog: userPageMocks.fetchRolesCatalog,
   fetchUserAccess: userPageMocks.fetchUserAccess,
   fetchUsersByOrganization: userPageMocks.fetchUsersByOrganization,
+  sendUserPasswordResetEmail: userPageMocks.sendUserPasswordResetEmail,
   updateUser: userPageMocks.updateUser,
   updateUserEntitlements: userPageMocks.updateUserEntitlements,
   updateUserGlobalRoles: userPageMocks.updateUserGlobalRoles,
@@ -40,11 +44,13 @@ import { renderWithProviders } from "@/test/test-utils"
 
 const {
   createUser,
+  deleteUser,
   fetchOrganizations,
   fetchPermissionsCatalog,
   fetchRolesCatalog,
   fetchUserAccess,
   fetchUsersByOrganization,
+  sendUserPasswordResetEmail,
   updateUser,
   updateUserEntitlements,
   updateUserGlobalRoles,
@@ -120,11 +126,13 @@ const userAccess = {
 describe("UsersPage", () => {
   beforeEach(() => {
     createUser.mockReset()
+    deleteUser.mockReset()
     fetchOrganizations.mockReset()
     fetchPermissionsCatalog.mockReset()
     fetchRolesCatalog.mockReset()
     fetchUserAccess.mockReset()
     fetchUsersByOrganization.mockReset()
+    sendUserPasswordResetEmail.mockReset()
     updateUser.mockReset()
     updateUserEntitlements.mockReset()
     updateUserGlobalRoles.mockReset()
@@ -143,6 +151,8 @@ describe("UsersPage", () => {
       id: "user-2",
       email: "nouveau@example.com",
     })
+    deleteUser.mockResolvedValue(undefined)
+    sendUserPasswordResetEmail.mockResolvedValue(undefined)
     updateUser.mockResolvedValue(undefined)
     updateUserPassword.mockResolvedValue(undefined)
     updateUserGlobalRoles.mockResolvedValue(undefined)
@@ -195,6 +205,9 @@ describe("UsersPage", () => {
     await user.click(screen.getByRole("button", { name: "Réinitialiser" }))
     await waitFor(() => expect(updateUserPassword).toHaveBeenCalledWith("user-1", "reset-456"))
 
+    await user.click(screen.getByRole("button", { name: "Envoyer un email de réinitialisation" }))
+    await waitFor(() => expect(sendUserPasswordResetEmail).toHaveBeenCalledWith("user-1"))
+
     await user.click(screen.getByText("Super Admin"))
     await user.click(screen.getByRole("button", { name: "Enregistrer les rôles globaux" }))
     await waitFor(() => expect(updateUserGlobalRoles).toHaveBeenCalledWith("user-1", ["super_admin", "user"]))
@@ -224,5 +237,43 @@ describe("UsersPage", () => {
 
     await screen.findByText("Permissions effectives")
     expect(screen.queryByText("Rôles globaux")).not.toBeInTheDocument()
+  })
+
+  it("confirms and deletes the selected user", async () => {
+    const user = userEvent.setup()
+    fetchUsersByOrganization.mockResolvedValueOnce(users).mockResolvedValueOnce([])
+
+    renderWithProviders(<UsersPage />, {
+      route: "/users?org=org-1&user=user-1",
+    })
+
+    await screen.findByText("Permissions effectives")
+    await user.click(screen.getByRole("button", { name: "Supprimer l’utilisateur" }))
+
+    expect(screen.getByText(/Cette action est irréversible/)).toBeInTheDocument()
+
+    await user.click(screen.getByRole("button", { name: "Confirmer la suppression" }))
+
+    await waitFor(() => expect(deleteUser).toHaveBeenCalledWith("user-1"))
+    await screen.findByText("Utilisateur supprimé.")
+    expect(
+      screen.getByText("Sélectionnez un utilisateur pour modifier ses rôles, son rattachement ou ses overrides."),
+    ).toBeInTheDocument()
+  })
+
+  it("surfaces backend delete errors without leaving the page", async () => {
+    const user = userEvent.setup()
+    deleteUser.mockRejectedValueOnce(new Error("cannot delete the last active super admin"))
+
+    renderWithProviders(<UsersPage />, {
+      route: "/users?org=org-1&user=user-1",
+    })
+
+    await screen.findByText("Permissions effectives")
+    await user.click(screen.getByRole("button", { name: "Supprimer l’utilisateur" }))
+    await user.click(screen.getByRole("button", { name: "Confirmer la suppression" }))
+
+    await screen.findByText("cannot delete the last active super admin")
+    expect(screen.getByRole("button", { name: "Confirmer la suppression" })).toBeInTheDocument()
   })
 })

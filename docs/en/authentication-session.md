@@ -7,7 +7,9 @@ The admin frontend consumes a dedicated backend session for the admin namespace.
 Used endpoints:
 
 - `/admin/auth/login`
+- `/admin/auth/forgot-password`
 - `/admin/auth/me`
+- `/admin/auth/reset-password`
 - `/admin/auth/refresh`
 - `/admin/auth/logout`
 
@@ -47,9 +49,16 @@ sequenceDiagram
 - collects `email` and `password`,
 - trims the email before submit,
 - calls `login(email, password)` through `useAdminSession`,
+- also exposes a link to `/forgot-password`,
 - redirects to `location.state.from` or `/dashboard`.
 
 If a session already exists, the page redirects immediately.
+
+## Self-service password reset
+
+- `/forgot-password` calls `POST /admin/auth/forgot-password` with `{ email }`.
+- `/reset-password?token=...` calls `POST /admin/auth/reset-password` with `{ token, password }`.
+- The final confirmation redirects back to `/login`.
 
 ## Bootstrap on protected routes
 

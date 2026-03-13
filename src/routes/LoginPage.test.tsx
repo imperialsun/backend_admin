@@ -90,4 +90,23 @@ describe("LoginPage", () => {
 
     expect(screen.getByText("dashboard-target")).toBeInTheDocument()
   })
+
+  it("exposes the forgot password link", () => {
+    useAdminSession.mockReturnValue(sessionMock())
+
+    renderWithProviders(
+      <LoginPage />,
+      {
+        route: "/login",
+        wrapper: (children) => (
+          <Routes>
+            <Route path="/login" element={children} />
+            <Route path="/forgot-password" element={<div>forgot-target</div>} />
+          </Routes>
+        ),
+      },
+    )
+
+    expect(screen.getByRole("link", { name: "Mot de passe oublié ?" })).toHaveAttribute("href", "/forgot-password")
+  })
 })

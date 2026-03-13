@@ -5,8 +5,10 @@ import { useAdminSession } from "@/lib/use-admin-session"
 import ActivityPage from "@/routes/ActivityPage"
 import DashboardPage from "@/routes/DashboardPage"
 import ForbiddenPage from "@/routes/ForbiddenPage"
+import ForgotPasswordPage from "@/routes/ForgotPasswordPage"
 import LoginPage from "@/routes/LoginPage"
 import OrganizationsPage from "@/routes/OrganizationsPage"
+import ResetPasswordPage from "@/routes/ResetPasswordPage"
 import UsersPage from "@/routes/UsersPage"
 
 function LoadingScreen() {
@@ -57,6 +59,8 @@ export default function App() {
   return (
     <Routes>
       <Route path="/login" element={<LoginPage />} />
+      <Route path="/forgot-password" element={<ForgotPasswordPage />} />
+      <Route path="/reset-password" element={<ResetPasswordPage />} />
       <Route element={<ProtectedLayout />}>
         <Route index element={<Navigate replace to="/dashboard" />} />
         <Route path="/dashboard" element={<DashboardPage />} />

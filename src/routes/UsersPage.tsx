@@ -10,11 +10,13 @@ import { Label } from "@/components/ui/label"
 import { Table, TableWrapper } from "@/components/ui/table"
 import {
   createUser,
+  deleteUser,
   fetchOrganizations,
   fetchPermissionsCatalog,
   fetchRolesCatalog,
   fetchUserAccess,
   fetchUsersByOrganization,
+  sendUserPasswordResetEmail,
   updateUser,
   updateUserEntitlements,
   updateUserGlobalRoles,
@@ -86,6 +88,22 @@ function toOverridePayload(state: OverrideState): PermissionOverride[] {
       effect: (effect === "allow" ? "allow" : "deny") as PermissionOverride["effect"],
     }))
     .sort((left, right) => left.permissionCode.localeCompare(right.permissionCode))
+}
+
+function matchesUserSearch(user: User, normalizedQuery: string) {
+  if (!normalizedQuery) {
+    return true
+  }
+  return (
+    user.email.toLowerCase().includes(normalizedQuery) ||
+    user.id.toLowerCase().includes(normalizedQuery) ||
+    user.status.toLowerCase().includes(normalizedQuery)
+  )
+}
+
+function filterUsersBySearch(users: User[], query: string) {
+  const normalizedQuery = query.trim().toLowerCase()
+  return users.filter((user) => matchesUserSearch(user, normalizedQuery))
 }
 
 function buildUserPanelKey(user: User, access: UserAccessResponse) {
@@ -205,11 +223,15 @@ function UserDetailPanel(props: {
   isSuperAdmin: boolean
   profilePending: boolean
   passwordPending: boolean
+  passwordEmailPending: boolean
+  deletePending: boolean
   globalRolesPending: boolean
   orgRolesPending: boolean
   entitlementsPending: boolean
   onSaveProfile: (input: ProfileUpdateInput) => Promise<void>
   onResetPassword: (password: string) => Promise<void>
+  onSendResetEmail: () => Promise<void>
+  onDeleteUser: () => Promise<void>
   onSaveGlobalRoles: (codes: string[]) => Promise<void>
   onSaveOrgRoles: (codes: string[]) => Promise<void>
   onSaveOverrides: (overrides: PermissionOverride[]) => Promise<void>
@@ -223,11 +245,15 @@ function UserDetailPanel(props: {
     isSuperAdmin,
     profilePending,
     passwordPending,
+    passwordEmailPending,
+    deletePending,
     globalRolesPending,
     orgRolesPending,
     entitlementsPending,
     onSaveProfile,
     onResetPassword,
+    onSendResetEmail,
+    onDeleteUser,
     onSaveGlobalRoles,
     onSaveOrgRoles,
     onSaveOverrides,
@@ -241,6 +267,7 @@ function UserDetailPanel(props: {
   const [orgRoles, setOrgRoles] = useState(access.orgRoles)
   const [overrides, setOverrides] = useState<OverrideState>(toOverrideState(access.overrides))
   const [feedback, setFeedback] = useState<string | null>(null)
+  const [deleteConfirmOpen, setDeleteConfirmOpen] = useState(false)
 
   const saveProfile = async () => {
     setFeedback(null)
@@ -256,6 +283,12 @@ function UserDetailPanel(props: {
     await onResetPassword(password)
     setPassword("")
     setFeedback("Mot de passe réinitialisé. Toutes les sessions actives ont été révoquées.")
+  }
+
+  const sendResetEmail = async () => {
+    setFeedback(null)
+    await onSendResetEmail()
+    setFeedback("Email de réinitialisation envoyé.")
   }
 
   const saveGlobalRoles = async () => {
@@ -274,6 +307,15 @@ function UserDetailPanel(props: {
     setFeedback(null)
     await onSaveOverrides(toOverridePayload(overrides))
     setFeedback("Overrides de permissions enregistrés.")
+  }
+
+  const confirmDelete = async () => {
+    setFeedback(null)
+    try {
+      await onDeleteUser()
+    } catch (error) {
+      setFeedback(error instanceof Error ? error.message : "Impossible de supprimer l’utilisateur.")
+    }
   }
 
   return (
@@ -336,19 +378,26 @@ function UserDetailPanel(props: {
             Le backend invalide les refresh sessions existantes après cette action.
           </CardDescription>
         </CardHeader>
-        <CardContent className="grid gap-4 md:grid-cols-[1fr_auto]">
-          <div className="space-y-2">
-            <Label htmlFor="reset-password">Nouveau mot de passe</Label>
-            <Input
-              id="reset-password"
-              onChange={(event) => setPassword(event.target.value)}
-              type="password"
-              value={password}
-            />
+        <CardContent className="grid gap-4">
+          <div className="grid gap-4 md:grid-cols-[1fr_auto]">
+            <div className="space-y-2">
+              <Label htmlFor="reset-password">Nouveau mot de passe</Label>
+              <Input
+                id="reset-password"
+                onChange={(event) => setPassword(event.target.value)}
+                type="password"
+                value={password}
+              />
+            </div>
+            <div className="flex items-end">
+              <Button disabled={passwordPending || !password.trim()} onClick={() => void savePassword()}>
+                {passwordPending ? "Réinitialisation..." : "Réinitialiser"}
+              </Button>
+            </div>
           </div>
-          <div className="flex items-end">
-            <Button disabled={passwordPending || !password.trim()} onClick={() => void savePassword()}>
-              {passwordPending ? "Réinitialisation..." : "Réinitialiser"}
+          <div className="flex justify-end">
+            <Button disabled={passwordEmailPending} onClick={() => void sendResetEmail()} variant="secondary">
+              {passwordEmailPending ? "Envoi..." : "Envoyer un email de réinitialisation"}
             </Button>
           </div>
         </CardContent>
@@ -406,6 +455,53 @@ function UserDetailPanel(props: {
         </Button>
       </div>
 
+      <Card className="border-destructive/40 bg-destructive/5">
+        <CardHeader>
+          <CardTitle>Suppression définitive</CardTitle>
+          <CardDescription>
+            Cette action supprime définitivement le compte, révoque ses sessions et efface ses données liées à
+            l’utilisateur.
+          </CardDescription>
+        </CardHeader>
+        <CardContent className="grid gap-4">
+          {deleteConfirmOpen ? (
+            <>
+              <p className="text-sm text-muted-foreground">
+                Confirmez uniquement si vous voulez supprimer ce compte maintenant. Cette action est irréversible.
+              </p>
+              <div className="flex flex-wrap justify-end gap-3">
+                <Button
+                  disabled={deletePending}
+                  onClick={() => {
+                    setDeleteConfirmOpen(false)
+                    setFeedback(null)
+                  }}
+                  variant="secondary"
+                >
+                  Annuler
+                </Button>
+                <Button disabled={deletePending} onClick={() => void confirmDelete()} variant="danger">
+                  {deletePending ? "Suppression..." : "Confirmer la suppression"}
+                </Button>
+              </div>
+            </>
+          ) : (
+            <div className="flex justify-end">
+              <Button
+                disabled={deletePending}
+                onClick={() => {
+                  setDeleteConfirmOpen(true)
+                  setFeedback(null)
+                }}
+                variant="danger"
+              >
+                Supprimer l’utilisateur
+              </Button>
+            </div>
+          )}
+        </CardContent>
+      </Card>
+
       <Card>
         <CardHeader>
           <CardTitle>Permissions effectives</CardTitle>
@@ -437,6 +533,7 @@ export default function UsersPage() {
   const organizationFilter = isSuperAdmin ? searchParams.get("org") ?? "" : session?.organization.id ?? ""
   const searchFilter = searchParams.get("q") ?? ""
   const selectedUserId = searchParams.get("user") ?? ""
+  const usersQueryKey = ["organization-users", organizationFilter] as const
 
   const setUsersSearchParams = (next: { org?: string; q?: string; user?: string }) => {
     const params = new URLSearchParams()
@@ -466,24 +563,12 @@ export default function UsersPage() {
 
   const usersQuery = useQuery({
     enabled: Boolean(organizationFilter),
-    queryKey: ["organization-users", organizationFilter],
+    queryKey: usersQueryKey,
     queryFn: () => fetchUsersByOrganization(organizationFilter),
   })
 
   const filteredUsers = useMemo(() => {
-    const normalizedQuery = searchFilter.trim().toLowerCase()
-    const users = usersQuery.data ?? []
-
-    return users.filter((user) => {
-      if (!normalizedQuery) {
-        return true
-      }
-      return (
-        user.email.toLowerCase().includes(normalizedQuery) ||
-        user.id.toLowerCase().includes(normalizedQuery) ||
-        user.status.toLowerCase().includes(normalizedQuery)
-      )
-    })
+    return filterUsersBySearch(usersQuery.data ?? [], searchFilter)
   }, [searchFilter, usersQuery.data])
 
   const selectedUser = useMemo(() => {
@@ -504,7 +589,7 @@ export default function UsersPage() {
     onSuccess: async (created) => {
       setCreateForm(defaultUserForm)
       setFeedback("Utilisateur créé.")
-      await queryClient.invalidateQueries({ queryKey: ["organization-users", organizationFilter] })
+      await queryClient.invalidateQueries({ queryKey: usersQueryKey })
       setUsersSearchParams({
         org: organizationFilter,
         q: searchFilter,
@@ -533,6 +618,40 @@ export default function UsersPage() {
     onSuccess: async () => {
       setFeedback("Mot de passe utilisateur réinitialisé.")
       await queryClient.invalidateQueries({ queryKey: ["user-access", selectedUser?.id] })
+    },
+  })
+
+  const passwordResetEmailMutation = useMutation({
+    mutationFn: async () => {
+      await sendUserPasswordResetEmail(selectedUser!.id)
+    },
+    onSuccess: async () => {
+      setFeedback("Email de réinitialisation envoyé.")
+      await queryClient.invalidateQueries({ queryKey: ["user-access", selectedUser?.id] })
+    },
+  })
+
+  const deleteMutation = useMutation({
+    mutationFn: async (user: User) => {
+      await deleteUser(user.id)
+      return user
+    },
+    onSuccess: async (deletedUser) => {
+      const currentUsers = queryClient.getQueryData<User[]>(usersQueryKey) ?? []
+      const remainingUsers = currentUsers.filter((user) => user.id !== deletedUser.id)
+      const nextVisibleUser = filterUsersBySearch(remainingUsers, searchFilter)[0]
+
+      queryClient.setQueryData(usersQueryKey, remainingUsers)
+      queryClient.removeQueries({ queryKey: ["user-access", deletedUser.id] })
+
+      setUsersSearchParams({
+        org: organizationFilter,
+        q: searchFilter,
+        user: nextVisibleUser?.id,
+      })
+      setFeedback("Utilisateur supprimé.")
+
+      await queryClient.invalidateQueries({ queryKey: usersQueryKey })
     },
   })
 
@@ -744,10 +863,7 @@ export default function UsersPage() {
                     const selected = selectedUser?.id === user.id
 
                     return (
-                      <tr
-                        className="border-t border-border/70"
-                        key={user.id}
-                      >
+                      <tr className="border-t border-border/70" key={user.id}>
                         <td className="px-6 py-4">
                           <div className="font-medium">{user.email}</div>
                           <div className="text-xs text-muted-foreground">{user.id}</div>
@@ -758,8 +874,6 @@ export default function UsersPage() {
                         <td className="px-6 py-4">{formatDateTime(user.createdAt)}</td>
                         <td className="px-6 py-4">
                           <Button
-                            size="sm"
-                            variant={selected ? "primary" : "secondary"}
                             onClick={() =>
                               setUsersSearchParams({
                                 org: organizationFilter,
@@ -767,6 +881,8 @@ export default function UsersPage() {
                                 user: user.id,
                               })
                             }
+                            size="sm"
+                            variant={selected ? "primary" : "secondary"}
                           >
                             {selected ? "Sélectionné" : "Gérer"}
                           </Button>
@@ -793,10 +909,14 @@ export default function UsersPage() {
           ) : (
             <UserDetailPanel
               access={accessQuery.data}
+              deletePending={deleteMutation.isPending}
               entitlementsPending={entitlementsMutation.isPending}
               globalRolesPending={globalRolesMutation.isPending}
               isSuperAdmin={isSuperAdmin}
               key={userPanelKey}
+              onDeleteUser={async () => {
+                await deleteMutation.mutateAsync(selectedUser)
+              }}
               onResetPassword={async (password) => {
                 await passwordMutation.mutateAsync(password)
               }}
@@ -812,11 +932,15 @@ export default function UsersPage() {
               onSaveProfile={async (input) => {
                 await profileMutation.mutateAsync(input)
               }}
+              onSendResetEmail={async () => {
+                await passwordResetEmailMutation.mutateAsync()
+              }}
               orgRolesPending={orgRolesMutation.isPending}
               organizations={organizationOptions.map((organization) => ({
                 id: organization.id,
                 name: organization.name,
               }))}
+              passwordEmailPending={passwordResetEmailMutation.isPending}
               passwordPending={passwordMutation.isPending}
               permissionsCatalog={permissionsCatalogQuery.data}
               profilePending={profileMutation.isPending}

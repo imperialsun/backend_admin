@@ -30,10 +30,14 @@ vi.mock("@/lib/admin-api", () => ({
 
 import { clearAdminCsrfToken, getAdminCsrfToken } from "@/lib/admin-security"
 import {
+  adminRequestPasswordReset,
+  adminResetPassword,
   adminLogin,
+  deleteUser,
   adminLogout,
   adminRefresh,
   initializeAdminSession,
+  sendUserPasswordResetEmail,
 } from "@/lib/admin-client"
 
 const { MockAdminHttpError, requestJson, requestNoContent } = adminApiMocks
@@ -114,5 +118,51 @@ describe("admin-client", () => {
     await adminLogin({ email: "admin@example.com", password: "secret" })
     await expect(adminLogout()).rejects.toThrow("network down")
     expect(getAdminCsrfToken()).toBe("")
+  })
+
+  it("requests an admin password reset email through the public auth namespace", async () => {
+    requestNoContent.mockResolvedValue(undefined)
+
+    await expect(adminRequestPasswordReset("admin@example.com")).resolves.toBeUndefined()
+    expect(requestNoContent).toHaveBeenCalledWith(
+      "/admin/auth/forgot-password",
+      expect.objectContaining({
+        method: "POST",
+        body: JSON.stringify({ email: "admin@example.com" }),
+      }),
+    )
+  })
+
+  it("submits a new admin password with the reset token", async () => {
+    requestNoContent.mockResolvedValue(undefined)
+
+    await expect(adminResetPassword("reset-token", "NewPass123!")).resolves.toBeUndefined()
+    expect(requestNoContent).toHaveBeenCalledWith(
+      "/admin/auth/reset-password",
+      expect.objectContaining({
+        method: "POST",
+        body: JSON.stringify({ token: "reset-token", password: "NewPass123!" }),
+      }),
+    )
+  })
+
+  it("sends a back-office password reset email for a managed user", async () => {
+    requestNoContent.mockResolvedValue(undefined)
+
+    await expect(sendUserPasswordResetEmail("user-42")).resolves.toBeUndefined()
+    expect(requestNoContent).toHaveBeenCalledWith(
+      "/admin/users/user-42/password-reset-email",
+      expect.objectContaining({ method: "POST" }),
+    )
+  })
+
+  it("deletes a managed user through the admin namespace", async () => {
+    requestNoContent.mockResolvedValue(undefined)
+
+    await expect(deleteUser("user-42")).resolves.toBeUndefined()
+    expect(requestNoContent).toHaveBeenCalledWith(
+      "/admin/users/user-42",
+      expect.objectContaining({ method: "DELETE" }),
+    )
   })
 })

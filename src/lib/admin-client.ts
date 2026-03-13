@@ -50,6 +50,20 @@ export async function adminLogin(input: LoginRequest) {
   )
 }
 
+export async function adminRequestPasswordReset(email: string) {
+  return requestNoContent("/admin/auth/forgot-password", {
+    method: "POST",
+    body: JSON.stringify({ email }),
+  })
+}
+
+export async function adminResetPassword(token: string, password: string) {
+  return requestNoContent("/admin/auth/reset-password", {
+    method: "POST",
+    body: JSON.stringify({ token, password }),
+  })
+}
+
 export async function adminMe() {
   return rememberSession(await requestJson<AdminSessionPayload>("/admin/auth/me"))
 }
@@ -129,6 +143,18 @@ export async function updateUserPassword(userId: string, password: string) {
   return requestNoContent(`/admin/users/${userId}/password`, {
     method: "PUT",
     body: JSON.stringify({ password }),
+  })
+}
+
+export async function sendUserPasswordResetEmail(userId: string) {
+  return requestNoContent(`/admin/users/${userId}/password-reset-email`, {
+    method: "POST",
+  })
+}
+
+export async function deleteUser(userId: string) {
+  return requestNoContent(`/admin/users/${userId}`, {
+    method: "DELETE",
   })
 }
 

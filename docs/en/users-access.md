@@ -73,12 +73,38 @@ Mutation:
 Mutation:
 
 - `updateUserPassword(userId, password)`
+- `sendUserPasswordResetEmail(userId)`
 
 UI message:
 
 - "Mot de passe reinitialise. Toutes les sessions actives ont ete revoquees."
 
 The frontend only relays the action; actual session revocation stays on the backend.
+
+## User deletion
+
+Mutation:
+
+- `deleteUser(userId)`
+
+UX:
+
+- dedicated destructive action in the detail panel,
+- inline confirmation before the network call,
+- backend refusal messages surfaced as-is in the UI.
+
+Backend guardrails:
+
+- self-deletion is blocked,
+- deleting the last active `super_admin` is blocked,
+- deleting the last active `org_admin` in the organization is blocked.
+
+Effects:
+
+- hard deletion of the account,
+- refresh session revocation through cascade cleanup,
+- deletion of user-scoped data,
+- reselection of the next visible user or removal of the `user` URL parameter.
 
 ## Roles and catalogs
 

@@ -7,7 +7,9 @@ Le front admin consomme une session backend dediee au namespace admin. Les cooki
 Endpoints utilises:
 
 - `/admin/auth/login`
+- `/admin/auth/forgot-password`
 - `/admin/auth/me`
+- `/admin/auth/reset-password`
 - `/admin/auth/refresh`
 - `/admin/auth/logout`
 
@@ -47,9 +49,16 @@ sequenceDiagram
 - collecte `email` et `password`,
 - trim l email avant soumission,
 - appelle `login(email, password)` via `useAdminSession`,
+- expose aussi un lien vers `/forgot-password`,
 - redirige vers `location.state.from` ou `/dashboard`.
 
 Si une session existe deja, la page redirige immediatement.
+
+## Reset mot de passe self-service
+
+- `/forgot-password` appelle `POST /admin/auth/forgot-password` avec `{ email }`.
+- `/reset-password?token=...` appelle `POST /admin/auth/reset-password` avec `{ token, password }`.
+- La confirmation finale renvoie vers `/login`.
 
 ## Bootstrap sur routes protegees
 

@@ -1,42 +1,44 @@
-import { Link, Navigate, useLocation, useNavigate } from "react-router-dom"
-import { ShieldCheck } from "lucide-react"
 import { useState } from "react"
+import { Link, Navigate } from "react-router-dom"
+import { ShieldCheck } from "lucide-react"
 
 import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
+import { adminRequestPasswordReset } from "@/lib/admin-client"
 import { useAdminSession } from "@/lib/use-admin-session"
 
-type LocationState = {
-  from?: string
-}
+const GENERIC_SUCCESS_MESSAGE =
+  "Si un compte administrateur actif correspond a cet email, un lien de reinitialisation vient d etre envoye."
 
-export default function LoginPage() {
-  const navigate = useNavigate()
-  const location = useLocation()
-  const { session, login } = useAdminSession()
+export default function ForgotPasswordPage() {
+  const { session } = useAdminSession()
   const [email, setEmail] = useState("")
-  const [password, setPassword] = useState("")
   const [submitting, setSubmitting] = useState(false)
   const [error, setError] = useState<string | null>(null)
-
-  const from = (location.state as LocationState | null)?.from ?? "/dashboard"
+  const [success, setSuccess] = useState<string | null>(null)
 
   if (session) {
-    return <Navigate replace to={from} />
+    return <Navigate replace to="/dashboard" />
   }
 
   const handleSubmit = async (event: React.FormEvent<HTMLFormElement>) => {
     event.preventDefault()
-    setSubmitting(true)
     setError(null)
+    setSuccess(null)
 
+    if (!email.trim()) {
+      setError("Veuillez saisir votre email.")
+      return
+    }
+
+    setSubmitting(true)
     try {
-      await login(email.trim(), password)
-      navigate(from, { replace: true })
+      await adminRequestPasswordReset(email.trim())
+      setSuccess(GENERIC_SUCCESS_MESSAGE)
     } catch (reason) {
-      setError(reason instanceof Error ? reason.message : "Connexion admin impossible.")
+      setError(reason instanceof Error ? reason.message : "Envoi impossible.")
     } finally {
       setSubmitting(false)
     }
@@ -50,10 +52,8 @@ export default function LoginPage() {
           <div className="mb-4 flex h-14 w-14 items-center justify-center rounded-2xl bg-primary/12 text-primary">
             <ShieldCheck className="h-7 w-7" />
           </div>
-          <CardTitle>Connexion administrateur</CardTitle>
-          <CardDescription>
-            Cette interface n’utilise que la session admin dédiée du backend. Aucune donnée sensible n’est stockée dans le navigateur.
-          </CardDescription>
+          <CardTitle>Mot de passe oublié</CardTitle>
+          <CardDescription>Entrez votre email administrateur pour recevoir un lien de reinitialisation.</CardDescription>
         </CardHeader>
 
         <CardContent>
@@ -70,29 +70,17 @@ export default function LoginPage() {
               />
             </div>
 
-            <div className="space-y-2">
-              <Label htmlFor="password">Mot de passe</Label>
-              <Input
-                autoComplete="current-password"
-                id="password"
-                onChange={(event) => setPassword(event.target.value)}
-                placeholder="Votre mot de passe"
-                type="password"
-                value={password}
-              />
-            </div>
-
-            <div className="flex justify-end">
-              <Link className="text-sm text-primary underline-offset-4 hover:underline" to="/forgot-password">
-                Mot de passe oublié ?
-              </Link>
-            </div>
-
+            {success ? <p className="rounded-2xl bg-muted px-4 py-3 text-sm text-muted-foreground">{success}</p> : null}
             {error ? <p className="rounded-2xl bg-destructive/10 px-4 py-3 text-sm text-destructive">{error}</p> : null}
 
-            <Button className="w-full" disabled={submitting} type="submit">
-              {submitting ? "Connexion..." : "Ouvrir l’administration"}
-            </Button>
+            <div className="flex items-center justify-between gap-4">
+              <Link className="text-sm text-muted-foreground underline-offset-4 hover:underline" to="/login">
+                Retour a la connexion
+              </Link>
+              <Button disabled={submitting} type="submit">
+                {submitting ? "Envoi..." : "Envoyer le lien"}
+              </Button>
+            </div>
           </form>
         </CardContent>
       </Card>
