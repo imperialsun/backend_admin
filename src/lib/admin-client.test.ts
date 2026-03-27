@@ -34,9 +34,11 @@ import {
   adminResetPassword,
   adminLogin,
   deleteUser,
+  deleteUserActivity,
   adminLogout,
   adminRefresh,
   initializeAdminSession,
+  fetchUserActivitySummary,
   sendUserPasswordResetEmail,
 } from "@/lib/admin-client"
 
@@ -162,6 +164,51 @@ describe("admin-client", () => {
     await expect(deleteUser("user-42")).resolves.toBeUndefined()
     expect(requestNoContent).toHaveBeenCalledWith(
       "/admin/users/user-42",
+      expect.objectContaining({ method: "DELETE" }),
+    )
+  })
+
+  it("fetches user activity summaries through the admin namespace", async () => {
+    requestJson.mockResolvedValue({
+      user: {
+        id: "user-42",
+        organizationId: "org-1",
+        email: "user@example.com",
+        status: "active",
+        createdAt: "2026-03-01T09:00:00Z",
+        updatedAt: "2026-03-01T09:00:00Z",
+      },
+      range: {
+        from: "2026-03-01",
+        to: "2026-03-31",
+      },
+      totals: {
+        transcriptions: 2,
+        reports: 1,
+      },
+      byDay: [],
+      breakdown: {
+        transcriptionsByMode: {},
+        transcriptionsByProvider: {},
+        reportsByMode: {},
+        reportsByProvider: {},
+      },
+    })
+
+    await expect(fetchUserActivitySummary("user-42", { from: "2026-03-01", to: "2026-03-31" })).resolves.toMatchObject({
+      user: expect.objectContaining({ id: "user-42" }),
+    })
+    expect(requestJson).toHaveBeenCalledWith(
+      "/admin/users/user-42/activity/summary?from=2026-03-01&to=2026-03-31",
+    )
+  })
+
+  it("purges user activity through the admin namespace", async () => {
+    requestNoContent.mockResolvedValue(undefined)
+
+    await expect(deleteUserActivity("user-42")).resolves.toBeUndefined()
+    expect(requestNoContent).toHaveBeenCalledWith(
+      "/admin/users/user-42/activity",
       expect.objectContaining({ method: "DELETE" }),
     )
   })

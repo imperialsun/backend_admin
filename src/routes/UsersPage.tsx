@@ -2,6 +2,7 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query"
 import { useMemo, useState } from "react"
 import { useSearchParams } from "react-router-dom"
 
+import { ActivitySummarySection } from "@/components/activity/ActivitySummarySection"
 import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
@@ -11,9 +12,11 @@ import { Table, TableWrapper } from "@/components/ui/table"
 import {
   createUser,
   deleteUser,
+  deleteUserActivity,
   fetchOrganizations,
   fetchPermissionsCatalog,
   fetchRolesCatalog,
+  fetchUserActivitySummary,
   fetchUserAccess,
   fetchUsersByOrganization,
   sendUserPasswordResetEmail,
@@ -31,7 +34,7 @@ import type {
   User,
   UserAccessResponse,
 } from "@/lib/types"
-import { formatDateTime } from "@/lib/utils"
+import { daysAgoDayString, formatDateTime, todayDayString } from "@/lib/utils"
 import { useAdminSession } from "@/lib/use-admin-session"
 
 type UserForm = {
@@ -267,7 +270,27 @@ function UserDetailPanel(props: {
   const [orgRoles, setOrgRoles] = useState(access.orgRoles)
   const [overrides, setOverrides] = useState<OverrideState>(toOverrideState(access.overrides))
   const [feedback, setFeedback] = useState<string | null>(null)
+  const [activityFrom, setActivityFrom] = useState(daysAgoDayString(29))
+  const [activityTo, setActivityTo] = useState(todayDayString())
+  const [activityFeedback, setActivityFeedback] = useState<string | null>(null)
   const [deleteConfirmOpen, setDeleteConfirmOpen] = useState(false)
+  const [purgeConfirmOpen, setPurgeConfirmOpen] = useState(false)
+  const queryClient = useQueryClient()
+
+  const activitySummaryQuery = useQuery({
+    queryKey: ["user-activity-summary", user.id, activityFrom, activityTo],
+    queryFn: () =>
+      fetchUserActivitySummary(user.id, {
+        from: activityFrom,
+        to: activityTo,
+      }),
+  })
+
+  const purgeActivityMutation = useMutation({
+    mutationFn: async () => {
+      await deleteUserActivity(user.id)
+    },
+  })
 
   const saveProfile = async () => {
     setFeedback(null)
@@ -315,6 +338,21 @@ function UserDetailPanel(props: {
       await onDeleteUser()
     } catch (error) {
       setFeedback(error instanceof Error ? error.message : "Impossible de supprimer l’utilisateur.")
+    }
+  }
+
+  const confirmPurgeActivity = async () => {
+    setActivityFeedback(null)
+    try {
+      await purgeActivityMutation.mutateAsync()
+      setPurgeConfirmOpen(false)
+      await Promise.all([
+        queryClient.invalidateQueries({ queryKey: ["user-activity-summary", user.id] }),
+        queryClient.invalidateQueries({ queryKey: ["activity-summary"] }),
+      ])
+      setActivityFeedback("Activité utilisateur supprimée.")
+    } catch (error) {
+      setActivityFeedback(error instanceof Error ? error.message : "Impossible de supprimer l’activité utilisateur.")
     }
   }
 
@@ -518,6 +556,104 @@ function UserDetailPanel(props: {
         </CardContent>
       </Card>
 
+      <Card>
+        <CardHeader>
+          <CardTitle>Activité utilisateur</CardTitle>
+          <CardDescription>
+            Consultez les transcriptions et rapports liés à ce compte, puis purgez son historique sans supprimer le
+            compte.
+          </CardDescription>
+        </CardHeader>
+        <CardContent className="space-y-6">
+          <div className="grid gap-4 md:grid-cols-2">
+            <div className="space-y-2">
+              <Label htmlFor="activity-from">Du</Label>
+              <Input
+                id="activity-from"
+                onChange={(event) => {
+                  setActivityFeedback(null)
+                  setActivityFrom(event.target.value)
+                }}
+                type="date"
+                value={activityFrom}
+              />
+            </div>
+            <div className="space-y-2">
+              <Label htmlFor="activity-to">Au</Label>
+              <Input
+                id="activity-to"
+                onChange={(event) => {
+                  setActivityFeedback(null)
+                  setActivityTo(event.target.value)
+                }}
+                type="date"
+                value={activityTo}
+              />
+            </div>
+          </div>
+
+          {activitySummaryQuery.isError ? (
+            <p className="text-sm text-destructive">
+              {activitySummaryQuery.error instanceof Error
+                ? activitySummaryQuery.error.message
+                : "Impossible de charger l’activité utilisateur."}
+            </p>
+          ) : activitySummaryQuery.data ? (
+            <ActivitySummarySection summary={activitySummaryQuery.data} showByUserTable={false} />
+          ) : (
+            <p className="text-sm text-muted-foreground">Chargement du résumé d’activité...</p>
+          )}
+
+          <div className="rounded-3xl border border-destructive/40 bg-destructive/5 p-5">
+            <div className="space-y-3">
+              <div>
+                <p className="text-sm font-semibold text-destructive">Purge de l’activité</p>
+                <p className="text-sm text-muted-foreground">
+                  Cette action supprime tous les événements d’activité du compte, sans supprimer le compte lui-même.
+                </p>
+              </div>
+              {purgeConfirmOpen ? (
+                <>
+                  <p className="text-sm text-muted-foreground">
+                    Confirmez uniquement si vous voulez effacer définitivement l’historique de ce compte.
+                  </p>
+                  <div className="flex flex-wrap justify-end gap-3">
+                    <Button
+                      disabled={purgeActivityMutation.isPending}
+                      onClick={() => {
+                        setPurgeConfirmOpen(false)
+                        setActivityFeedback(null)
+                      }}
+                      variant="secondary"
+                    >
+                      Annuler
+                    </Button>
+                    <Button disabled={purgeActivityMutation.isPending} onClick={() => void confirmPurgeActivity()} variant="danger">
+                      {purgeActivityMutation.isPending ? "Purge..." : "Confirmer la purge"}
+                    </Button>
+                  </div>
+                </>
+              ) : (
+                <div className="flex justify-end">
+                  <Button
+                    disabled={purgeActivityMutation.isPending}
+                    onClick={() => {
+                      setPurgeConfirmOpen(true)
+                      setActivityFeedback(null)
+                    }}
+                    variant="danger"
+                  >
+                    Purger l’activité
+                  </Button>
+                </div>
+              )}
+            </div>
+          </div>
+
+          {activityFeedback ? <p className="text-sm text-muted-foreground">{activityFeedback}</p> : null}
+        </CardContent>
+      </Card>
+
       {feedback ? <p className="text-sm text-muted-foreground">{feedback}</p> : null}
     </div>
   )
@@ -643,6 +779,7 @@ export default function UsersPage() {
 
       queryClient.setQueryData(usersQueryKey, remainingUsers)
       queryClient.removeQueries({ queryKey: ["user-access", deletedUser.id] })
+      queryClient.removeQueries({ queryKey: ["user-activity-summary", deletedUser.id] })
 
       setUsersSearchParams({
         org: organizationFilter,
@@ -651,7 +788,10 @@ export default function UsersPage() {
       })
       setFeedback("Utilisateur supprimé.")
 
-      await queryClient.invalidateQueries({ queryKey: usersQueryKey })
+      await Promise.all([
+        queryClient.invalidateQueries({ queryKey: usersQueryKey }),
+        queryClient.invalidateQueries({ queryKey: ["activity-summary"] }),
+      ])
     },
   })
 

@@ -96,3 +96,26 @@ export interface ActivitySummary {
     reportsByProvider: Record<string, number>
   }
 }
+
+export interface UserActivitySummary {
+  user: User
+  range: {
+    from: string
+    to: string
+  }
+  totals: {
+    transcriptions: number
+    reports: number
+  }
+  byDay: Array<{
+    day: string
+    transcriptions: number
+    reports: number
+  }>
+  breakdown: {
+    transcriptionsByMode: Record<string, number>
+    transcriptionsByProvider: Record<string, number>
+    reportsByMode: Record<string, number>
+    reportsByProvider: Record<string, number>
+  }
+}

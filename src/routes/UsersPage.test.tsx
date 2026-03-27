@@ -5,9 +5,11 @@ import { beforeEach, describe, expect, it, vi } from "vitest"
 const userPageMocks = vi.hoisted(() => ({
   createUser: vi.fn(),
   deleteUser: vi.fn(),
+  deleteUserActivity: vi.fn(),
   fetchOrganizations: vi.fn(),
   fetchPermissionsCatalog: vi.fn(),
   fetchRolesCatalog: vi.fn(),
+  fetchUserActivitySummary: vi.fn(),
   fetchUserAccess: vi.fn(),
   fetchUsersByOrganization: vi.fn(),
   sendUserPasswordResetEmail: vi.fn(),
@@ -22,9 +24,11 @@ const userPageMocks = vi.hoisted(() => ({
 vi.mock("@/lib/admin-client", () => ({
   createUser: userPageMocks.createUser,
   deleteUser: userPageMocks.deleteUser,
+  deleteUserActivity: userPageMocks.deleteUserActivity,
   fetchOrganizations: userPageMocks.fetchOrganizations,
   fetchPermissionsCatalog: userPageMocks.fetchPermissionsCatalog,
   fetchRolesCatalog: userPageMocks.fetchRolesCatalog,
+  fetchUserActivitySummary: userPageMocks.fetchUserActivitySummary,
   fetchUserAccess: userPageMocks.fetchUserAccess,
   fetchUsersByOrganization: userPageMocks.fetchUsersByOrganization,
   sendUserPasswordResetEmail: userPageMocks.sendUserPasswordResetEmail,
@@ -45,9 +49,11 @@ import { renderWithProviders } from "@/test/test-utils"
 const {
   createUser,
   deleteUser,
+  deleteUserActivity,
   fetchOrganizations,
   fetchPermissionsCatalog,
   fetchRolesCatalog,
+  fetchUserActivitySummary,
   fetchUserAccess,
   fetchUsersByOrganization,
   sendUserPasswordResetEmail,
@@ -127,9 +133,11 @@ describe("UsersPage", () => {
   beforeEach(() => {
     createUser.mockReset()
     deleteUser.mockReset()
+    deleteUserActivity.mockReset()
     fetchOrganizations.mockReset()
     fetchPermissionsCatalog.mockReset()
     fetchRolesCatalog.mockReset()
+    fetchUserActivitySummary.mockReset()
     fetchUserAccess.mockReset()
     fetchUsersByOrganization.mockReset()
     sendUserPasswordResetEmail.mockReset()
@@ -145,6 +153,36 @@ describe("UsersPage", () => {
     fetchUsersByOrganization.mockResolvedValue(users)
     fetchRolesCatalog.mockResolvedValue(rolesCatalog)
     fetchPermissionsCatalog.mockResolvedValue(permissionsCatalog)
+    fetchUserActivitySummary.mockResolvedValue({
+      user: {
+        ...users[0],
+      },
+      range: {
+        from: "2026-03-01",
+        to: "2026-03-31",
+      },
+      totals: {
+        transcriptions: 1,
+        reports: 0,
+      },
+      byDay: [
+        {
+          day: "2026-03-01",
+          transcriptions: 1,
+          reports: 0,
+        },
+      ],
+      breakdown: {
+        transcriptionsByMode: {
+          local: 1,
+        },
+        transcriptionsByProvider: {
+          local_upload: 1,
+        },
+        reportsByMode: {},
+        reportsByProvider: {},
+      },
+    })
     fetchUserAccess.mockResolvedValue(userAccess)
     createUser.mockResolvedValue({
       ...users[0],
@@ -275,5 +313,25 @@ describe("UsersPage", () => {
 
     await screen.findByText("cannot delete the last active super admin")
     expect(screen.getByRole("button", { name: "Confirmer la suppression" })).toBeInTheDocument()
+  })
+
+  it("renders activity data and purges it from the user panel", async () => {
+    const user = userEvent.setup()
+    deleteUserActivity.mockResolvedValue(undefined)
+
+    renderWithProviders(<UsersPage />, {
+      route: "/users?org=org-1&user=user-1",
+    })
+
+    await screen.findByText("Activité utilisateur")
+    await screen.findByText("2026-03-01")
+
+    await user.click(screen.getByRole("button", { name: "Purger l’activité" }))
+    expect(screen.getByText(/effacer définitivement l’historique de ce compte/i)).toBeInTheDocument()
+
+    await user.click(screen.getByRole("button", { name: "Confirmer la purge" }))
+
+    await waitFor(() => expect(deleteUserActivity).toHaveBeenCalledWith("user-1"))
+    await screen.findByText("Activité utilisateur supprimée.")
   })
 })

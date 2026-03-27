@@ -8,6 +8,7 @@ import type {
   PermissionOverride,
   RolesCatalog,
   User,
+  UserActivitySummary,
   UserAccessResponse,
 } from "@/lib/types"
 
@@ -200,4 +201,18 @@ export async function fetchActivitySummary(input: { from: string; to: string; or
     params.set("organizationId", input.organizationId)
   }
   return requestJson<ActivitySummary>(`/admin/activity/summary?${params.toString()}`)
+}
+
+export async function fetchUserActivitySummary(userId: string, input: { from: string; to: string }) {
+  const params = new URLSearchParams({
+    from: input.from,
+    to: input.to,
+  })
+  return requestJson<UserActivitySummary>(`/admin/users/${userId}/activity/summary?${params.toString()}`)
+}
+
+export async function deleteUserActivity(userId: string) {
+  return requestNoContent(`/admin/users/${userId}/activity`, {
+    method: "DELETE",
+  })
 }
