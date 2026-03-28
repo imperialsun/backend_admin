@@ -69,7 +69,7 @@ Service:
 
 - `admin`: Vite dev server on port `4173`.
 
-The local runtime config fallback in [`public/runtime-config.js`](../public/runtime-config.js) already targets `http://localhost:8080/api/v1` on localhost, so no runtime variable is needed for the dev stack.
+The local runtime config fallback in [`public/runtime-config.js`](../../public/runtime-config.js) already targets `http://localhost:8080/api/v1` on localhost, so no runtime variable is needed for the dev stack.
 
 Start:
 

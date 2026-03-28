@@ -69,7 +69,7 @@ Service:
 
 - `admin`: serveur de dev Vite sur le port `4173`.
 
-Le fallback runtime local dans [`public/runtime-config.js`](../public/runtime-config.js) pointe deja vers `http://localhost:8080/api/v1` quand on est sur localhost, donc aucune variable runtime n est necessaire pour la stack dev.
+Le fallback runtime local dans [`public/runtime-config.js`](../../public/runtime-config.js) pointe deja vers `http://localhost:8080/api/v1` quand on est sur localhost, donc aucune variable runtime n est necessaire pour la stack dev.
 
 Lancement:
 
