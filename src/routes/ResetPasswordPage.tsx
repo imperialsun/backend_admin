@@ -6,6 +6,7 @@ import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
+import { PasswordStrengthMeter } from "@/components/ui/PasswordStrengthMeter"
 import { adminResetPassword } from "@/lib/admin-client"
 import { useAdminSession } from "@/lib/use-admin-session"
 
@@ -75,6 +76,7 @@ export default function ResetPasswordPage() {
                 type="password"
                 value={password}
               />
+              <PasswordStrengthMeter password={password} />
             </div>
 
             <div className="space-y-2">

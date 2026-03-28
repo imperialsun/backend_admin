@@ -255,8 +255,10 @@ describe("UsersPage", () => {
     })
 
     await screen.findByText("medecin@example.com")
+    expect(screen.getByRole("progressbar", { name: "Sécurité du mot de passe" })).toHaveAttribute("aria-valuenow", "0")
     await user.type(screen.getByLabelText("Email", { selector: "#create-user-email" }), "nouveau@example.com")
     await user.type(screen.getByLabelText("Mot de passe initial"), "secret-123")
+    expect(screen.getByRole("progressbar", { name: "Sécurité du mot de passe" })).toHaveAttribute("aria-valuenow", "3")
     await user.click(screen.getByRole("button", { name: "Créer l’utilisateur" }))
 
     await waitFor(() =>
@@ -385,7 +387,13 @@ describe("UsersPage", () => {
       }),
     )
 
+    expect(screen.getAllByRole("progressbar", { name: "Sécurité du mot de passe" })).toHaveLength(2)
     await user.type(screen.getByLabelText("Nouveau mot de passe"), "reset-456")
+    expect(
+      screen.getAllByRole("progressbar", { name: "Sécurité du mot de passe" }).some(
+        (element) => element.getAttribute("aria-valuenow") === "3",
+      ),
+    ).toBe(true)
     await user.click(screen.getByRole("button", { name: "Réinitialiser" }))
     await waitFor(() => expect(updateUserPassword).toHaveBeenCalledWith("user-1", "reset-456"))
 

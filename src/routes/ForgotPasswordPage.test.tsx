@@ -64,6 +64,7 @@ describe("ForgotPasswordPage", () => {
         "Si un compte administrateur actif correspond a cet email, un lien de reinitialisation vient d etre envoye.",
       ),
     ).toBeInTheDocument()
+    expect(screen.queryByRole("progressbar", { name: "Sécurité du mot de passe" })).toBeNull()
   })
 
   it("redirects to the dashboard when an admin session already exists", () => {

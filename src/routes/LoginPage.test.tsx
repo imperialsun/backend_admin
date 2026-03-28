@@ -60,6 +60,7 @@ describe("LoginPage", () => {
     await user.click(screen.getByRole("button", { name: "Ouvrir l’administration" }))
 
     await waitFor(() => expect(login).toHaveBeenCalledWith("admin@example.com", "secret"))
+    expect(screen.queryByRole("progressbar", { name: "Sécurité du mot de passe" })).toBeNull()
   })
 
   it("redirects immediately when a session already exists", () => {

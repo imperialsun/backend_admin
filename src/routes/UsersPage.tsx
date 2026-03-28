@@ -10,6 +10,7 @@ import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
+import { PasswordStrengthMeter } from "@/components/ui/PasswordStrengthMeter"
 import { Table, TableWrapper } from "@/components/ui/table"
 import { Textarea } from "@/components/ui/textarea"
 import {
@@ -526,6 +527,7 @@ function UserDetailPanel(props: {
                 type="password"
                 value={password}
               />
+              <PasswordStrengthMeter password={password} />
             </div>
             <div className="flex items-end">
               <Button disabled={passwordPending || !password.trim()} onClick={() => void savePassword()}>
@@ -1054,6 +1056,7 @@ export default function UsersPage() {
                 type="password"
                 value={createForm.password}
               />
+              <PasswordStrengthMeter password={createForm.password} />
             </div>
 
             <div className="space-y-2">

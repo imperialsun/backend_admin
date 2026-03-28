@@ -55,7 +55,9 @@ describe("ResetPasswordPage", () => {
       },
     )
 
+    expect(screen.getByRole("progressbar", { name: "Sécurité du mot de passe" })).toHaveAttribute("aria-valuenow", "0")
     await user.type(screen.getByLabelText("Nouveau mot de passe"), "NewPass123!")
+    expect(screen.getByRole("progressbar", { name: "Sécurité du mot de passe" })).toHaveAttribute("aria-valuenow", "3")
     await user.type(screen.getByLabelText("Confirmer le mot de passe"), "NewPass123!")
     await user.click(screen.getByRole("button", { name: "Mettre a jour" }))
 
@@ -78,7 +80,9 @@ describe("ResetPasswordPage", () => {
       },
     )
 
+    expect(screen.getByRole("progressbar", { name: "Sécurité du mot de passe" })).toHaveAttribute("aria-valuenow", "0")
     await user.type(screen.getByLabelText("Nouveau mot de passe"), "NewPass123!")
+    expect(screen.getByRole("progressbar", { name: "Sécurité du mot de passe" })).toHaveAttribute("aria-valuenow", "3")
     await user.type(screen.getByLabelText("Confirmer le mot de passe"), "NewPass123!")
     await user.click(screen.getByRole("button", { name: "Mettre a jour" }))
 
