@@ -59,6 +59,21 @@ describe("admin-api", () => {
     expect(headers.get("X-Admin-CSRF")).toBeNull()
   })
 
+  it("retries safe requests after a transient 404", async () => {
+    const fetchMock = vi.mocked(fetch)
+    fetchMock
+      .mockResolvedValueOnce(new Response("Not found", { status: 404 }))
+      .mockResolvedValueOnce(new Response(JSON.stringify({ ok: true }), { status: 200 }))
+
+    const response = await adminFetch("/admin/auth/me", {
+      retryAttempts: 1,
+      retryInitialBackoffMs: 1,
+    })
+
+    expect(response.status).toBe(200)
+    expect(fetchMock).toHaveBeenCalledTimes(2)
+  })
+
   it("parses structured backend errors", async () => {
     const error = await toAdminHttpError(
       new Response(JSON.stringify({ error: "forbidden organization scope" }), {
@@ -83,6 +98,40 @@ describe("admin-api", () => {
       path: "/admin/auth/login",
       code: "network_error",
     })
+  })
+
+  it("fails fast when the configured timeout expires", async () => {
+    const fetchMock = vi.mocked(fetch)
+    fetchMock.mockImplementation((_url: string, init?: RequestInit) => {
+      return new Promise<Response>((_resolve, reject) => {
+        const abortHandler = () => {
+          const abortError = new Error("The operation was aborted.")
+          abortError.name = "AbortError"
+          reject(abortError)
+        }
+
+        if (init?.signal?.aborted) {
+          abortHandler()
+          return
+        }
+
+        init?.signal?.addEventListener("abort", abortHandler, { once: true })
+      })
+    })
+
+    await expect(
+      adminFetch("/admin/auth/me", {
+        timeoutMs: 5,
+        retryAttempts: 0,
+      })
+    ).rejects.toMatchObject({
+      name: "AdminHttpError",
+      status: 0,
+      code: "timeout",
+      message: expect.stringContaining("délai"),
+    })
+
+    expect(fetchMock).toHaveBeenCalledTimes(1)
   })
 
   it("returns an empty object when parsing an empty body", async () => {
