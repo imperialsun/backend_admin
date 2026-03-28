@@ -1,6 +1,8 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query"
-import { useMemo, useState } from "react"
+import { useEffect, useMemo, useState, type ReactNode } from "react"
+import { createPortal } from "react-dom"
 import { useSearchParams } from "react-router-dom"
+import { X } from "lucide-react"
 
 import { ActivitySummarySection } from "@/components/activity/ActivitySummarySection"
 import { Badge } from "@/components/ui/badge"
@@ -238,6 +240,80 @@ function PermissionOverridesEditor(props: {
         ))}
       </CardContent>
     </Card>
+  )
+}
+
+function UserDetailModal(props: {
+  children: ReactNode
+  description: string
+  open: boolean
+  onClose: () => void
+  title: string
+}) {
+  const { children, description, open, onClose, title } = props
+
+  useEffect(() => {
+    if (!open) {
+      return
+    }
+
+    const previousOverflow = document.body.style.overflow
+    document.body.style.overflow = "hidden"
+
+    const handleKeyDown = (event: KeyboardEvent) => {
+      if (event.key === "Escape") {
+        event.preventDefault()
+        onClose()
+      }
+    }
+
+    document.addEventListener("keydown", handleKeyDown)
+
+    return () => {
+      document.body.style.overflow = previousOverflow
+      document.removeEventListener("keydown", handleKeyDown)
+    }
+  }, [onClose, open])
+
+  if (!open) {
+    return null
+  }
+
+  return createPortal(
+    <div
+      className="fixed inset-0 z-50 bg-foreground/20 p-4 backdrop-blur-sm"
+      onClick={onClose}
+      data-testid="user-detail-overlay"
+    >
+      <div className="flex min-h-full items-center justify-center">
+        <div
+          aria-describedby="user-detail-modal-description"
+          aria-labelledby="user-detail-modal-title"
+          aria-modal="true"
+          className="flex max-h-[calc(100vh-2rem)] w-full max-w-5xl flex-col overflow-hidden rounded-[2rem] border border-border/70 bg-card shadow-2xl"
+          onClick={(event) => event.stopPropagation()}
+          role="dialog"
+        >
+          <div className="flex items-start justify-between gap-4 border-b border-border/70 bg-background/80 px-6 py-5 backdrop-blur">
+            <div className="min-w-0">
+              <p className="text-xs uppercase tracking-[0.2em] text-muted-foreground">Détail utilisateur</p>
+              <h2 className="truncate text-xl font-semibold" id="user-detail-modal-title">
+                {title}
+              </h2>
+              <p className="mt-1 text-sm text-muted-foreground" id="user-detail-modal-description">
+                {description}
+              </p>
+            </div>
+            <Button autoFocus className="shrink-0 gap-2" onClick={onClose} size="sm" variant="secondary">
+              <X className="h-4 w-4" />
+              Fermer
+            </Button>
+          </div>
+          <div className="min-h-0 flex-1 overflow-y-auto p-6">{children}</div>
+        </div>
+      </div>
+    </div>,
+    document.body,
   )
 }
 
@@ -736,10 +812,10 @@ export default function UsersPage() {
   }, [searchFilter, usersQuery.data])
 
   const selectedUser = useMemo(() => {
-    if (!filteredUsers.length) {
+    if (!selectedUserId) {
       return null
     }
-    return filteredUsers.find((user) => user.id === selectedUserId) ?? filteredUsers[0]
+    return filteredUsers.find((user) => user.id === selectedUserId) ?? null
   }, [filteredUsers, selectedUserId])
 
   const accessQuery = useQuery({
@@ -888,6 +964,13 @@ export default function UsersPage() {
 
   const organizationOptions = organizationsQuery.data ?? []
   const organizationSummary = organizationOptions.find((organization) => organization.id === organizationFilter)
+  const detailError = accessQuery.isError
+    ? accessQuery.error
+    : rolesCatalogQuery.isError
+      ? rolesCatalogQuery.error
+      : permissionsCatalogQuery.isError
+        ? permissionsCatalogQuery.error
+        : null
   const userPanelKey =
     selectedUser && accessQuery.data ? buildUserPanelKey(selectedUser, accessQuery.data) : "empty-user-panel"
 
@@ -1034,257 +1117,274 @@ export default function UsersPage() {
 
       {feedback ? <p className="text-sm text-muted-foreground">{feedback}</p> : null}
 
-      <div className="grid gap-6 xl:grid-cols-[1.05fr_0.95fr]">
-        <div className="space-y-6">
+      <div className="grid gap-6">
+        <Card>
+          <CardHeader>
+            <CardTitle>Création en lot</CardTitle>
+            <CardDescription>
+              Collez plusieurs adresses email. Les séparateurs `,`, `;` et les retours ligne sont acceptés. Chaque
+              compte reçoit un mot de passe temporaire envoyé par email.
+            </CardDescription>
+          </CardHeader>
+          <CardContent className="space-y-4">
+            <div className="space-y-2">
+              <Label htmlFor="bulk-user-emails">Emails</Label>
+              <Textarea
+                id="bulk-user-emails"
+                onChange={(event) => setBulkEmailsInput(event.target.value)}
+                placeholder={"user1@example.com\nuser2@example.com"}
+                value={bulkEmailsInput}
+              />
+              <p className="text-xs text-muted-foreground">
+                {bulkEmails.length} adresse{bulkEmails.length > 1 ? "s" : ""} prête
+                {bulkEmails.length > 1 ? "s" : ""} à être créée{bulkEmails.length > 1 ? "s" : ""}.
+              </p>
+            </div>
+            <div className="flex flex-wrap items-center justify-between gap-3">
+              <p className="text-sm text-muted-foreground">Les doublons dans le champ sont ignorés avant l’envoi.</p>
+              <Button
+                disabled={bulkCreateMutation.isPending || !organizationFilter || bulkEmails.length === 0}
+                onClick={() => {
+                  setBulkFeedback(null)
+                  setBulkResult(null)
+                  void bulkCreateMutation.mutateAsync()
+                }}
+              >
+                {bulkCreateMutation.isPending ? "Création..." : "Créer les comptes"}
+              </Button>
+            </div>
+            {bulkFeedback ? <p className="text-sm text-muted-foreground">{bulkFeedback}</p> : null}
+            {bulkResult ? (
+              <div className="grid gap-4">
+                <div className="flex flex-wrap gap-2">
+                  <Badge variant="success">
+                    {bulkResult.created.length} créé{bulkResult.created.length > 1 ? "s" : ""}
+                  </Badge>
+                  <Badge variant="danger">
+                    {bulkResult.failed.length} échec{bulkResult.failed.length > 1 ? "s" : ""}
+                  </Badge>
+                </div>
+                {bulkResult.created.length > 0 ? (
+                  <div className="space-y-2">
+                    <p className="text-sm font-medium">Comptes créés</p>
+                    <ul className="space-y-2">
+                      {bulkResult.created.map((item) => (
+                        <li className="rounded-2xl border border-border/70 bg-muted/40 px-4 py-3 text-sm" key={item.id}>
+                          <span className="font-medium">{item.email}</span>
+                          <span className="ml-2 text-muted-foreground">({item.status})</span>
+                        </li>
+                      ))}
+                    </ul>
+                  </div>
+                ) : null}
+                {bulkResult.failed.length > 0 ? (
+                  <div className="space-y-2">
+                    <p className="text-sm font-medium">Échecs</p>
+                    <ul className="space-y-2">
+                      {bulkResult.failed.map((item) => (
+                        <li
+                          className="rounded-2xl border border-destructive/30 bg-destructive/5 px-4 py-3 text-sm"
+                          key={`${item.email}-${item.error}`}
+                        >
+                          <span className="font-medium">{item.email}</span>
+                          <span className="ml-2 text-muted-foreground">{item.error}</span>
+                          {item.userId ? (
+                            <span className="mt-1 block text-xs text-muted-foreground">Utilisateur: {item.userId}</span>
+                          ) : null}
+                        </li>
+                      ))}
+                    </ul>
+                  </div>
+                ) : null}
+              </div>
+            ) : null}
+          </CardContent>
+        </Card>
+
+        <TableWrapper>
+          <Table>
+            <thead className="bg-background/80 text-xs uppercase tracking-[0.2em] text-muted-foreground">
+              <tr>
+                <th className="px-6 py-4">Email</th>
+                <th className="px-6 py-4">Statut</th>
+                <th className="px-6 py-4">Créé</th>
+                <th className="px-6 py-4">Actions</th>
+              </tr>
+            </thead>
+            <tbody>
+              {!organizationFilter ? (
+                <tr className="border-t border-border/70">
+                  <td className="px-6 py-4 text-muted-foreground" colSpan={4}>
+                    Sélectionnez une organisation pour gérer ses utilisateurs.
+                  </td>
+                </tr>
+              ) : filteredUsers.length === 0 ? (
+                <tr className="border-t border-border/70">
+                  <td className="px-6 py-4 text-muted-foreground" colSpan={4}>
+                    Aucun utilisateur trouvé pour ce filtre.
+                  </td>
+                </tr>
+              ) : (
+                filteredUsers.map((user) => {
+                  const selected = selectedUser?.id === user.id
+                  const isDeleteConfirmOpen = deleteConfirmUserId === user.id
+
+                  return (
+                    <tr className="border-t border-border/70" key={user.id}>
+                      <td className="px-6 py-4">
+                        <div className="font-medium">{user.email}</div>
+                        <div className="text-xs text-muted-foreground">{user.id}</div>
+                      </td>
+                      <td className="px-6 py-4">
+                        <Badge variant={user.status === "active" ? "success" : "danger"}>{user.status}</Badge>
+                      </td>
+                      <td className="px-6 py-4">{formatDateTime(user.createdAt)}</td>
+                      <td className="px-6 py-4">
+                        {isDeleteConfirmOpen ? (
+                          <div className="flex flex-wrap gap-2">
+                            <Button
+                              disabled={deleteMutation.isPending}
+                              onClick={() => setDeleteConfirmUserId(null)}
+                              size="sm"
+                              variant="secondary"
+                            >
+                              Annuler
+                            </Button>
+                            <Button
+                              disabled={deleteMutation.isPending}
+                              onClick={() => {
+                                setFeedback(null)
+                                void (async () => {
+                                  try {
+                                    await deleteMutation.mutateAsync(user)
+                                  } catch (error) {
+                                    setFeedback(
+                                      error instanceof Error ? error.message : "Impossible de supprimer l’utilisateur.",
+                                    )
+                                  }
+                                })()
+                              }}
+                              size="sm"
+                              variant="danger"
+                            >
+                              Confirmer la suppression
+                            </Button>
+                          </div>
+                        ) : (
+                          <div className="flex flex-wrap gap-2">
+                            <Button
+                              onClick={() => {
+                                setDeleteConfirmUserId(null)
+                                setUsersSearchParams({
+                                  org: organizationFilter,
+                                  q: searchFilter,
+                                  user: user.id,
+                                })
+                              }}
+                              size="sm"
+                              variant={selected ? "primary" : "secondary"}
+                            >
+                              {selected ? "Sélectionné" : "Gérer"}
+                            </Button>
+                            <Button
+                              disabled={deleteMutation.isPending}
+                              onClick={() => {
+                                setFeedback(null)
+                                setDeleteConfirmUserId(user.id)
+                              }}
+                              size="sm"
+                              variant="danger"
+                            >
+                              Supprimer
+                            </Button>
+                          </div>
+                        )}
+                      </td>
+                    </tr>
+                  )
+                })
+              )}
+            </tbody>
+          </Table>
+        </TableWrapper>
+      </div>
+
+      <UserDetailModal
+        description={
+          selectedUser
+            ? `Compte ciblé: ${selectedUser.id}. Les mutations déclenchent une révocation des sessions backend.`
+            : ""
+        }
+        open={Boolean(selectedUser)}
+        onClose={() => {
+          setUsersSearchParams({
+            org: organizationFilter,
+            q: searchFilter,
+          })
+        }}
+        title={selectedUser?.email ?? ""}
+      >
+        {detailError ? (
           <Card>
             <CardHeader>
-              <CardTitle>Création en lot</CardTitle>
+              <CardTitle>Impossible de charger le détail utilisateur</CardTitle>
               <CardDescription>
-                Collez plusieurs adresses email. Les séparateurs `,`, `;` et les retours ligne sont acceptés. Chaque
-                compte reçoit un mot de passe temporaire envoyé par email.
+                {detailError instanceof Error ? detailError.message : "Réessayez dans quelques instants."}
               </CardDescription>
             </CardHeader>
-            <CardContent className="space-y-4">
-              <div className="space-y-2">
-                <Label htmlFor="bulk-user-emails">Emails</Label>
-                <Textarea
-                  id="bulk-user-emails"
-                  onChange={(event) => setBulkEmailsInput(event.target.value)}
-                  placeholder={"user1@example.com\nuser2@example.com"}
-                  value={bulkEmailsInput}
-                />
-                <p className="text-xs text-muted-foreground">
-                  {bulkEmails.length} adresse{bulkEmails.length > 1 ? "s" : ""} prête
-                  {bulkEmails.length > 1 ? "s" : ""} à être créée{bulkEmails.length > 1 ? "s" : ""}.
-                </p>
-              </div>
-              <div className="flex flex-wrap items-center justify-between gap-3">
-                <p className="text-sm text-muted-foreground">
-                  Les doublons dans le champ sont ignorés avant l’envoi.
-                </p>
-                <Button
-                  disabled={bulkCreateMutation.isPending || !organizationFilter || bulkEmails.length === 0}
-                  onClick={() => {
-                    setBulkFeedback(null)
-                    setBulkResult(null)
-                    void bulkCreateMutation.mutateAsync()
-                  }}
-                >
-                  {bulkCreateMutation.isPending ? "Création..." : "Créer les comptes"}
-                </Button>
-              </div>
-              {bulkFeedback ? <p className="text-sm text-muted-foreground">{bulkFeedback}</p> : null}
-              {bulkResult ? (
-                <div className="grid gap-4">
-                  <div className="flex flex-wrap gap-2">
-                    <Badge variant="success">
-                      {bulkResult.created.length} créé{bulkResult.created.length > 1 ? "s" : ""}
-                    </Badge>
-                    <Badge variant="danger">
-                      {bulkResult.failed.length} échec{bulkResult.failed.length > 1 ? "s" : ""}
-                    </Badge>
-                  </div>
-                  {bulkResult.created.length > 0 ? (
-                    <div className="space-y-2">
-                      <p className="text-sm font-medium">Comptes créés</p>
-                      <ul className="space-y-2">
-                        {bulkResult.created.map((item) => (
-                          <li className="rounded-2xl border border-border/70 bg-muted/40 px-4 py-3 text-sm" key={item.id}>
-                            <span className="font-medium">{item.email}</span>
-                            <span className="ml-2 text-muted-foreground">({item.status})</span>
-                          </li>
-                        ))}
-                      </ul>
-                    </div>
-                  ) : null}
-                  {bulkResult.failed.length > 0 ? (
-                    <div className="space-y-2">
-                      <p className="text-sm font-medium">Échecs</p>
-                      <ul className="space-y-2">
-                        {bulkResult.failed.map((item) => (
-                          <li
-                            className="rounded-2xl border border-destructive/30 bg-destructive/5 px-4 py-3 text-sm"
-                            key={`${item.email}-${item.error}`}
-                          >
-                            <span className="font-medium">{item.email}</span>
-                            <span className="ml-2 text-muted-foreground">{item.error}</span>
-                            {item.userId ? (
-                              <span className="mt-1 block text-xs text-muted-foreground">Utilisateur: {item.userId}</span>
-                            ) : null}
-                          </li>
-                        ))}
-                      </ul>
-                    </div>
-                  ) : null}
-                </div>
-              ) : null}
-            </CardContent>
           </Card>
-
-          <TableWrapper>
-            <Table>
-              <thead className="bg-background/80 text-xs uppercase tracking-[0.2em] text-muted-foreground">
-                <tr>
-                  <th className="px-6 py-4">Email</th>
-                  <th className="px-6 py-4">Statut</th>
-                  <th className="px-6 py-4">Créé</th>
-                  <th className="px-6 py-4">Actions</th>
-                </tr>
-              </thead>
-              <tbody>
-                {!organizationFilter ? (
-                  <tr className="border-t border-border/70">
-                    <td className="px-6 py-4 text-muted-foreground" colSpan={4}>
-                      Sélectionnez une organisation pour gérer ses utilisateurs.
-                    </td>
-                  </tr>
-                ) : filteredUsers.length === 0 ? (
-                  <tr className="border-t border-border/70">
-                    <td className="px-6 py-4 text-muted-foreground" colSpan={4}>
-                      Aucun utilisateur trouvé pour ce filtre.
-                    </td>
-                  </tr>
-                ) : (
-                  filteredUsers.map((user) => {
-                    const selected = selectedUser?.id === user.id
-                    const isDeleteConfirmOpen = deleteConfirmUserId === user.id
-
-                    return (
-                      <tr className="border-t border-border/70" key={user.id}>
-                        <td className="px-6 py-4">
-                          <div className="font-medium">{user.email}</div>
-                          <div className="text-xs text-muted-foreground">{user.id}</div>
-                        </td>
-                        <td className="px-6 py-4">
-                          <Badge variant={user.status === "active" ? "success" : "danger"}>{user.status}</Badge>
-                        </td>
-                        <td className="px-6 py-4">{formatDateTime(user.createdAt)}</td>
-                        <td className="px-6 py-4">
-                          {isDeleteConfirmOpen ? (
-                            <div className="flex flex-wrap gap-2">
-                              <Button
-                                disabled={deleteMutation.isPending}
-                                onClick={() => setDeleteConfirmUserId(null)}
-                                size="sm"
-                                variant="secondary"
-                              >
-                                Annuler
-                              </Button>
-                              <Button
-                                disabled={deleteMutation.isPending}
-                                onClick={() => {
-                                  setFeedback(null)
-                                  void (async () => {
-                                    try {
-                                      await deleteMutation.mutateAsync(user)
-                                    } catch (error) {
-                                      setFeedback(
-                                        error instanceof Error
-                                          ? error.message
-                                          : "Impossible de supprimer l’utilisateur.",
-                                      )
-                                    }
-                                  })()
-                                }}
-                                size="sm"
-                                variant="danger"
-                              >
-                                Confirmer la suppression
-                              </Button>
-                            </div>
-                          ) : (
-                            <div className="flex flex-wrap gap-2">
-                              <Button
-                                onClick={() => {
-                                  setDeleteConfirmUserId(null)
-                                  setUsersSearchParams({
-                                    org: organizationFilter,
-                                    q: searchFilter,
-                                    user: user.id,
-                                  })
-                                }}
-                                size="sm"
-                                variant={selected ? "primary" : "secondary"}
-                              >
-                                {selected ? "Sélectionné" : "Gérer"}
-                              </Button>
-                              <Button
-                                disabled={deleteMutation.isPending}
-                                onClick={() => {
-                                  setFeedback(null)
-                                  setDeleteConfirmUserId(user.id)
-                                }}
-                                size="sm"
-                                variant="danger"
-                              >
-                                Supprimer
-                              </Button>
-                            </div>
-                          )}
-                        </td>
-                      </tr>
-                    )
-                  })
-                )}
-              </tbody>
-            </Table>
-          </TableWrapper>
-        </div>
-
-        <div>
-          {!selectedUser || !accessQuery.data || !rolesCatalogQuery.data || !permissionsCatalogQuery.data ? (
-            <Card>
-              <CardHeader>
-                <CardTitle>Panneau d’accès</CardTitle>
-                <CardDescription>
-                  Sélectionnez un utilisateur pour modifier ses rôles, son rattachement ou ses overrides.
-                </CardDescription>
-              </CardHeader>
-            </Card>
-          ) : (
-            <UserDetailPanel
-              access={accessQuery.data}
-              deletePending={deleteMutation.isPending}
-              entitlementsPending={entitlementsMutation.isPending}
-              globalRolesPending={globalRolesMutation.isPending}
-              isSuperAdmin={isSuperAdmin}
-              key={userPanelKey}
-              onDeleteUser={async () => {
-                await deleteMutation.mutateAsync(selectedUser)
-              }}
-              onResetPassword={async (password) => {
-                await passwordMutation.mutateAsync(password)
-              }}
-              onSaveGlobalRoles={async (codes) => {
-                await globalRolesMutation.mutateAsync(codes)
-              }}
-              onSaveOrgRoles={async (codes) => {
-                await orgRolesMutation.mutateAsync(codes)
-              }}
-              onSaveOverrides={async (overrides) => {
-                await entitlementsMutation.mutateAsync(overrides)
-              }}
-              onSaveProfile={async (input) => {
-                await profileMutation.mutateAsync(input)
-              }}
-              onSendResetEmail={async () => {
-                await passwordResetEmailMutation.mutateAsync()
-              }}
-              orgRolesPending={orgRolesMutation.isPending}
-              organizations={organizationOptions.map((organization) => ({
-                id: organization.id,
-                name: organization.name,
-              }))}
-              passwordEmailPending={passwordResetEmailMutation.isPending}
-              passwordPending={passwordMutation.isPending}
-              permissionsCatalog={permissionsCatalogQuery.data}
-              profilePending={profileMutation.isPending}
-              rolesCatalog={rolesCatalogQuery.data}
-              user={selectedUser}
-            />
-          )}
-        </div>
-      </div>
+        ) : !selectedUser || !accessQuery.data || !rolesCatalogQuery.data || !permissionsCatalogQuery.data ? (
+          <Card>
+            <CardHeader>
+              <CardTitle>Chargement du détail utilisateur</CardTitle>
+              <CardDescription>
+                Les rôles, permissions et actions sont en cours de récupération.
+              </CardDescription>
+            </CardHeader>
+          </Card>
+        ) : (
+          <UserDetailPanel
+            access={accessQuery.data}
+            deletePending={deleteMutation.isPending}
+            entitlementsPending={entitlementsMutation.isPending}
+            globalRolesPending={globalRolesMutation.isPending}
+            isSuperAdmin={isSuperAdmin}
+            key={userPanelKey}
+            onDeleteUser={async () => {
+              await deleteMutation.mutateAsync(selectedUser)
+            }}
+            onResetPassword={async (password) => {
+              await passwordMutation.mutateAsync(password)
+            }}
+            onSaveGlobalRoles={async (codes) => {
+              await globalRolesMutation.mutateAsync(codes)
+            }}
+            onSaveOrgRoles={async (codes) => {
+              await orgRolesMutation.mutateAsync(codes)
+            }}
+            onSaveOverrides={async (overrides) => {
+              await entitlementsMutation.mutateAsync(overrides)
+            }}
+            onSaveProfile={async (input) => {
+              await profileMutation.mutateAsync(input)
+            }}
+            onSendResetEmail={async () => {
+              await passwordResetEmailMutation.mutateAsync()
+            }}
+            orgRolesPending={orgRolesMutation.isPending}
+            organizations={organizationOptions.map((organization) => ({
+              id: organization.id,
+              name: organization.name,
+            }))}
+            passwordEmailPending={passwordResetEmailMutation.isPending}
+            passwordPending={passwordMutation.isPending}
+            permissionsCatalog={permissionsCatalogQuery.data}
+            profilePending={profileMutation.isPending}
+            rolesCatalog={rolesCatalogQuery.data}
+            user={selectedUser}
+          />
+        )}
+      </UserDetailModal>
     </div>
   )
 }

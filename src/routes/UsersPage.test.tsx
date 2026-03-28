@@ -1,6 +1,7 @@
 import { screen, waitFor, within } from "@testing-library/react"
 import userEvent from "@testing-library/user-event"
 import { beforeEach, describe, expect, it, vi } from "vitest"
+import { useLocation } from "react-router-dom"
 
 const userPageMocks = vi.hoisted(() => ({
   createUser: vi.fn(),
@@ -180,6 +181,24 @@ function buildActivitySummary(user: { id: string; organizationId: string; email:
   }
 }
 
+function LocationProbe() {
+  const location = useLocation()
+
+  return <div data-testid="location-search">{location.search}</div>
+}
+
+async function openUserDetail(user: ReturnType<typeof userEvent.setup>, email: string) {
+  const userEmail = await screen.findByText(email)
+  const row = userEmail.closest("tr")
+  expect(row).not.toBeNull()
+
+  await user.click(within(row as HTMLTableRowElement).getByRole("button", { name: "Gérer" }))
+
+  const dialog = await screen.findByRole("dialog", { name: email })
+  await screen.findByText("Permissions effectives")
+  return dialog
+}
+
 describe("UsersPage", () => {
   beforeEach(() => {
     createUser.mockReset()
@@ -232,7 +251,7 @@ describe("UsersPage", () => {
   it("creates a user in the selected organization", async () => {
     const user = userEvent.setup()
     renderWithProviders(<UsersPage />, {
-      route: "/users?org=org-1&user=user-1",
+      route: "/users?org=org-1",
     })
 
     await screen.findByText("medecin@example.com")
@@ -273,7 +292,7 @@ describe("UsersPage", () => {
     })
 
     renderWithProviders(<UsersPage />, {
-      route: "/users?org=org-1&user=user-1",
+      route: "/users?org=org-1",
     })
 
     await screen.findByText("medecin@example.com")
@@ -302,7 +321,7 @@ describe("UsersPage", () => {
     fetchUsersByOrganization.mockResolvedValueOnce([users[0], secondaryUser]).mockResolvedValueOnce([secondaryUser])
 
     renderWithProviders(<UsersPage />, {
-      route: "/users?org=org-1&user=user-1",
+      route: "/users?org=org-1",
     })
 
     const firstUserEmail = await screen.findByText("medecin@example.com")
@@ -321,8 +340,8 @@ describe("UsersPage", () => {
     await waitFor(() => expect(deleteUser).toHaveBeenCalledWith("user-1"))
     await screen.findByText("Utilisateur supprimé.")
     expect(screen.queryByText("medecin@example.com")).not.toBeInTheDocument()
-    expect(screen.getByText(/Compte ciblé: user-2\./)).toBeInTheDocument()
-    expect(screen.getByRole("button", { name: "Sélectionné" })).toBeInTheDocument()
+    await screen.findByText(/Compte ciblé: user-2\./)
+    await screen.findByRole("dialog", { name: "assistant@example.com" })
   })
 
   it("surfaces backend delete errors from the table action", async () => {
@@ -330,7 +349,7 @@ describe("UsersPage", () => {
     deleteUser.mockRejectedValueOnce(new Error("cannot delete the last active super admin"))
 
     renderWithProviders(<UsersPage />, {
-      route: "/users?org=org-1&user=user-1",
+      route: "/users?org=org-1",
     })
 
     const firstUserEmail = await screen.findByText("medecin@example.com")
@@ -348,10 +367,10 @@ describe("UsersPage", () => {
   it("updates profile, password, global roles and overrides", async () => {
     const user = userEvent.setup()
     renderWithProviders(<UsersPage />, {
-      route: "/users?org=org-1&user=user-1",
+      route: "/users?org=org-1",
     })
 
-    await screen.findByText("Permissions effectives")
+    await openUserDetail(user, "medecin@example.com")
 
     const emailInput = screen.getByLabelText("Email", { selector: "#user-email" })
     await user.clear(emailInput)
@@ -409,10 +428,10 @@ describe("UsersPage", () => {
     fetchUsersByOrganization.mockResolvedValueOnce(users).mockResolvedValueOnce([])
 
     renderWithProviders(<UsersPage />, {
-      route: "/users?org=org-1&user=user-1",
+      route: "/users?org=org-1",
     })
 
-    await screen.findByText("Permissions effectives")
+    await openUserDetail(user, "medecin@example.com")
     await user.click(screen.getByRole("button", { name: "Supprimer l’utilisateur" }))
 
     expect(screen.getByText(/Cette action est irréversible/)).toBeInTheDocument()
@@ -421,9 +440,8 @@ describe("UsersPage", () => {
 
     await waitFor(() => expect(deleteUser).toHaveBeenCalledWith("user-1"))
     await screen.findByText("Utilisateur supprimé.")
-    expect(
-      screen.getByText("Sélectionnez un utilisateur pour modifier ses rôles, son rattachement ou ses overrides."),
-    ).toBeInTheDocument()
+    await waitFor(() => expect(screen.queryByRole("dialog")).not.toBeInTheDocument())
+    expect(screen.getByText("Aucun utilisateur trouvé pour ce filtre.")).toBeInTheDocument()
   })
 
   it("surfaces backend delete errors without leaving the page", async () => {
@@ -431,10 +449,10 @@ describe("UsersPage", () => {
     deleteUser.mockRejectedValueOnce(new Error("cannot delete the last active super admin"))
 
     renderWithProviders(<UsersPage />, {
-      route: "/users?org=org-1&user=user-1",
+      route: "/users?org=org-1",
     })
 
-    await screen.findByText("Permissions effectives")
+    await openUserDetail(user, "medecin@example.com")
     await user.click(screen.getByRole("button", { name: "Supprimer l’utilisateur" }))
     await user.click(screen.getByRole("button", { name: "Confirmer la suppression" }))
 
@@ -447,9 +465,10 @@ describe("UsersPage", () => {
     deleteUserActivity.mockResolvedValue(undefined)
 
     renderWithProviders(<UsersPage />, {
-      route: "/users?org=org-1&user=user-1",
+      route: "/users?org=org-1",
     })
 
+    await openUserDetail(user, "medecin@example.com")
     await screen.findByText("Activité utilisateur")
     await screen.findByText("2026-03-01")
 
@@ -460,5 +479,27 @@ describe("UsersPage", () => {
 
     await waitFor(() => expect(deleteUserActivity).toHaveBeenCalledWith("user-1"))
     await screen.findByText("Activité utilisateur supprimée.")
+  })
+
+  it("opens the user modal from Gérer and preserves org and search filters when closing", async () => {
+    const user = userEvent.setup()
+
+    renderWithProviders(
+      <>
+        <LocationProbe />
+        <UsersPage />
+      </>,
+      {
+        route: "/users?org=org-1&q=medecin",
+      },
+    )
+
+    const dialog = await openUserDetail(user, "medecin@example.com")
+    expect(dialog).toBeInTheDocument()
+
+    await user.click(within(dialog).getByRole("button", { name: "Fermer" }))
+    await waitFor(() => expect(screen.queryByRole("dialog")).not.toBeInTheDocument())
+    expect(screen.getByTestId("location-search")).toHaveTextContent("?org=org-1&q=medecin")
+    expect(screen.getByRole("button", { name: "Gérer" })).toBeInTheDocument()
   })
 })

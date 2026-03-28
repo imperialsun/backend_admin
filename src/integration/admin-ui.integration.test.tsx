@@ -3,6 +3,7 @@ import { screen } from "@testing-library/react"
 import userEvent from "@testing-library/user-event"
 import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, it } from "vitest"
 import { Route, Routes } from "react-router-dom"
+import { within } from "@testing-library/react"
 
 import type { AdminSessionPayload } from "@/lib/types"
 import { clearAdminCsrfToken, setAdminCsrfToken } from "@/lib/admin-security"
@@ -148,7 +149,7 @@ describe("admin ui smoke integration", () => {
     expect(await screen.findAllByText(`UI Org ${suffix}`)).not.toHaveLength(0)
   })
 
-  it("renders users and their access panel from real backend data", async () => {
+  it("renders users and opens the access modal from real backend data", async () => {
     const user = userEvent.setup()
     const adminSession = await loginAdminDirect(transport, backend.credentials)
     setAdminCsrfToken(adminSession.csrfToken)
@@ -175,6 +176,13 @@ describe("admin ui smoke integration", () => {
     await user.selectOptions(screen.getByLabelText("Organisation"), organization.id)
 
     expect(await screen.findAllByText(createdUser.email)).not.toHaveLength(0)
+
+    const row = await screen.findByText(createdUser.email)
+    const rowElement = row.closest("tr")
+    expect(rowElement).not.toBeNull()
+    await user.click(within(rowElement as HTMLTableRowElement).getByRole("button", { name: "Gérer" }))
+
+    await screen.findByRole("dialog", { name: createdUser.email })
     await screen.findByText("Permissions effectives")
   })
 
