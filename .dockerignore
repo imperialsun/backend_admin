@@ -4,3 +4,6 @@ dist
 .git
 .github
 npm-debug.log*
+docs
+*.md
+*.test.*
