@@ -6,18 +6,18 @@ The repo provides:
 
 - a multi-stage `Dockerfile`,
 - runtime Nginx configuration,
-- an entrypoint that generates `runtime-config.js`.
-
-There is no `docker-compose.yml` in this repo. The standard deployment flow is `docker build` followed by `docker run`.
+- an entrypoint that generates `runtime-config.js`,
+- a production compose stack (`compose.yml`),
+- a development compose stack (`compose.dev.yml`).
 
 ## Production Dockerfile
 
 Stages:
 
-1. `node:25-alpine` build image,
+1. `node:25.8.1-alpine3.23` build image,
 2. `npm ci`,
 3. `npm run build`,
-4. `nginx:1.29-alpine` runtime image,
+4. `nginx:1.29.6-alpine3.23` runtime image,
 5. copy of `dist/`, Nginx config, and entrypoint.
 
 ## Runtime Nginx
@@ -39,6 +39,44 @@ Responsibilities:
 - serve `/assets/` with immutable cache,
 - apply security headers.
 
+## Production compose
+
+Service:
+
+- `admin`: Nginx-backed static app on port `8080`.
+
+The backend URL is set explicitly in `compose.yml` to `https://trapi.demeter-sante.fr/api/v1`.
+
+Environment:
+
+- `BACKEND_BASE_URL=https://trapi.demeter-sante.fr/api/v1`
+
+Start:
+
+```bash
+docker compose up --build -d
+```
+
+Stop:
+
+```bash
+docker compose down
+```
+
+## Development compose
+
+Service:
+
+- `admin`: Vite dev server on port `4173`.
+
+The local runtime config fallback in [`public/runtime-config.js`](../public/runtime-config.js) already targets `http://localhost:8080/api/v1` on localhost, so no runtime variable is needed for the dev stack.
+
+Start:
+
+```bash
+docker compose -f compose.dev.yml up -d
+```
+
 ## Runtime backend injection
 
 The entrypoint reads:
@@ -59,27 +97,19 @@ Container default value:
 
 ## Useful commands
 
-Build image:
+Production-like local launch:
 
 ```bash
-docker build -t demeter-admin-panel .
-```
-
-Run locally:
-
-```bash
-docker run --rm -p 4173:8080 \
-  -e BACKEND_BASE_URL=http://localhost:8080/api/v1 \
-  demeter-admin-panel
+docker compose up --build -d
 ```
 
 ## Minimum smoke checks
 
 ```bash
-curl -I http://localhost:4173/index.html
-curl -I http://localhost:4173/runtime-config.js
-curl -I http://localhost:4173/users
-curl http://localhost:4173/runtime-config.js
+curl -I http://localhost:8080/index.html
+curl -I http://localhost:8080/runtime-config.js
+curl -I http://localhost:8080/users
+curl http://localhost:8080/runtime-config.js
 ```
 
 Expected:

@@ -23,6 +23,22 @@ npm run dev
 
 Default Vite URL: `http://localhost:4173`.
 
+### Docker dev stack
+
+```bash
+docker compose -f compose.dev.yml up -d
+```
+
+### Docker production stack
+
+```bash
+docker compose up --build -d
+```
+
+### Workspace local deployment
+
+From the workspace root, `./deploy-transcode.sh local` starts Backend, Front user, and Admin panel together.
+
 ### Local validation
 
 ```bash
@@ -86,15 +102,8 @@ The production image is a multi-stage build:
 1. Node builds the Vite bundle.
 2. Nginx serves `dist/` on port `8080`.
 3. The entrypoint rewrites `runtime-config.js` from `BACKEND_BASE_URL`.
-
-Example:
-
-```bash
-docker build -t demeter-admin-panel .
-docker run --rm -p 4173:8080 \
-  -e BACKEND_BASE_URL=http://localhost:8080/api/v1 \
-  demeter-admin-panel
-```
+4. `compose.yml` maps the container to `http://localhost:8080`.
+5. `compose.dev.yml` runs Vite directly on `http://localhost:4173`.
 
 The runtime Nginx configuration provides:
 

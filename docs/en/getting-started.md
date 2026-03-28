@@ -2,7 +2,7 @@
 
 ## Prerequisites
 
-- Node.js `25.6.1` (see `.nvmrc`).
+- Node.js `25.8.1` (see `.nvmrc`).
 - npm.
 - Docker Engine for containerized build and runtime.
 - A reachable Demeter backend exposing the admin namespace.
@@ -15,6 +15,7 @@ npm run dev
 ```
 
 Default Vite server: `http://localhost:4173`.
+The local runtime-config fallback points to `http://localhost:8080/api/v1` on localhost, so the Backend stack must be running on that port for real API calls.
 
 ## Build and preview
 
@@ -24,6 +25,18 @@ npm run preview
 ```
 
 Preview also runs on port `4173`.
+
+## Docker dev stack
+
+```bash
+docker compose -f compose.dev.yml up -d
+```
+
+## Docker production stack
+
+```bash
+docker compose up --build -d
+```
 
 ## Useful scripts
 
@@ -36,7 +49,7 @@ Preview also runs on port `4173`.
 
 ## Runtime config
 
-The target backend is read from `public/runtime-config.js` locally and from `BACKEND_BASE_URL` in the Docker image.
+The target backend is read from `public/runtime-config.js` locally and from `BACKEND_BASE_URL` in the Docker image or `compose.yml`.
 
 Default value:
 
@@ -44,15 +57,6 @@ Default value:
 window.__APP_RUNTIME_CONFIG__ = {
   backendBaseUrl: "http://localhost:8080/api/v1",
 }
-```
-
-## Docker build
-
-```bash
-docker build -t demeter-admin-panel .
-docker run --rm -p 4173:8080 \
-  -e BACKEND_BASE_URL=http://localhost:8080/api/v1 \
-  demeter-admin-panel
 ```
 
 ## Common setup failures

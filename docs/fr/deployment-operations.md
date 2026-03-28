@@ -6,18 +6,18 @@ Le repo fournit:
 
 - un `Dockerfile` multi-stage,
 - une configuration Nginx runtime,
-- un entrypoint qui genere `runtime-config.js`.
-
-Il n y a pas de `docker-compose.yml` dans ce repo. Le deploiement standard repose sur `docker build` puis `docker run`.
+- un entrypoint qui genere `runtime-config.js`,
+- un compose production (`compose.yml`),
+- un compose developpement (`compose.dev.yml`).
 
 ## Dockerfile production
 
 Etapes:
 
-1. image build `node:25-alpine`,
+1. image build `node:25.8.1-alpine3.23`,
 2. `npm ci`,
 3. `npm run build`,
-4. image runtime `nginx:1.29-alpine`,
+4. image runtime `nginx:1.29.6-alpine3.23`,
 5. copie de `dist/`, de la config Nginx et de l entrypoint.
 
 ## Runtime Nginx
@@ -39,6 +39,44 @@ Fonctions:
 - servir `/assets/` avec cache immutable,
 - appliquer les headers de securite.
 
+## Compose production
+
+Service:
+
+- `admin`: app statique servie par Nginx sur le port `8080`.
+
+L URL backend est fixee explicitement dans `compose.yml` sur `https://trapi.demeter-sante.fr/api/v1`.
+
+Environnement:
+
+- `BACKEND_BASE_URL=https://trapi.demeter-sante.fr/api/v1`
+
+Lancement:
+
+```bash
+docker compose up --build -d
+```
+
+Arret:
+
+```bash
+docker compose down
+```
+
+## Compose developpement
+
+Service:
+
+- `admin`: serveur de dev Vite sur le port `4173`.
+
+Le fallback runtime local dans [`public/runtime-config.js`](../public/runtime-config.js) pointe deja vers `http://localhost:8080/api/v1` quand on est sur localhost, donc aucune variable runtime n est necessaire pour la stack dev.
+
+Lancement:
+
+```bash
+docker compose -f compose.dev.yml up -d
+```
+
 ## Injection runtime backend
 
 L entrypoint lit:
@@ -59,27 +97,19 @@ Valeur par defaut du conteneur:
 
 ## Commandes utiles
 
-Build image:
+Lancement local prod-like:
 
 ```bash
-docker build -t demeter-admin-panel .
-```
-
-Run local:
-
-```bash
-docker run --rm -p 4173:8080 \
-  -e BACKEND_BASE_URL=http://localhost:8080/api/v1 \
-  demeter-admin-panel
+docker compose up --build -d
 ```
 
 ## Smoke checks minimaux
 
 ```bash
-curl -I http://localhost:4173/index.html
-curl -I http://localhost:4173/runtime-config.js
-curl -I http://localhost:4173/users
-curl http://localhost:4173/runtime-config.js
+curl -I http://localhost:8080/index.html
+curl -I http://localhost:8080/runtime-config.js
+curl -I http://localhost:8080/users
+curl http://localhost:8080/runtime-config.js
 ```
 
 Attendus:
