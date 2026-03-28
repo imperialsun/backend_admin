@@ -46,10 +46,10 @@ export default function LoginPage() {
       <div className="absolute inset-0 bg-[radial-gradient(circle_at_top_right,rgba(222,102,12,0.22),transparent_22%),radial-gradient(circle_at_bottom_left,rgba(24,72,112,0.12),transparent_26%)]" />
       <Card className="relative z-10 w-full max-w-lg border-white/40 bg-white/92">
         <CardHeader className="text-center">
-          <div className="mb-2 flex justify-center">
+          <div className="mb-4 flex justify-center">
             <img
               alt="Logo Demeter Santé"
-              className="h-20 w-auto max-w-[240px] object-contain sm:h-24"
+              className="h-24 w-auto max-w-[280px] object-contain sm:h-28"
               src="/logo.png"
             />
           </div>

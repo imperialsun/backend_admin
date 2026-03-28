@@ -17,10 +17,10 @@ export function Sidebar() {
 
   return (
     <aside className="border-b border-border/70 bg-card/75 p-4 backdrop-blur md:min-h-screen md:w-72 md:border-b-0 md:border-r">
-      <div className="mb-6 space-y-3">
+      <div className="mb-6 space-y-4">
         <img
           alt="Logo Demeter Santé"
-          className="h-12 w-auto max-w-[180px] object-contain"
+          className="h-16 w-auto max-w-[220px] object-contain"
           src="/logo.png"
         />
         <div>
