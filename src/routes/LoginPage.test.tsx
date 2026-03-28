@@ -54,6 +54,7 @@ describe("LoginPage", () => {
       },
     )
 
+    expect(screen.getByAltText("Logo Demeter Santé")).toHaveAttribute("src", "/logo.png")
     await user.type(screen.getByLabelText("Email"), " admin@example.com ")
     await user.type(screen.getByLabelText("Mot de passe"), "secret")
     await user.click(screen.getByRole("button", { name: "Ouvrir l’administration" }))

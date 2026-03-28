@@ -38,6 +38,7 @@ import {
   adminLogout,
   adminRefresh,
   initializeAdminSession,
+  createUsersBulk,
   fetchUserActivitySummary,
   sendUserPasswordResetEmail,
 } from "@/lib/admin-client"
@@ -165,6 +166,24 @@ describe("admin-client", () => {
     expect(requestNoContent).toHaveBeenCalledWith(
       "/admin/users/user-42",
       expect.objectContaining({ method: "DELETE" }),
+    )
+  })
+
+  it("creates users in bulk through the admin namespace", async () => {
+    requestJson.mockResolvedValue({
+      created: [{ id: "user-1", email: "bulk@example.com", status: "active" }],
+      failed: [],
+    })
+
+    await expect(createUsersBulk("org-1", ["bulk@example.com"])).resolves.toMatchObject({
+      created: [{ email: "bulk@example.com" }],
+    })
+    expect(requestJson).toHaveBeenCalledWith(
+      "/admin/organizations/org-1/users/bulk",
+      expect.objectContaining({
+        method: "POST",
+        body: JSON.stringify({ emails: ["bulk@example.com"] }),
+      }),
     )
   })
 

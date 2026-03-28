@@ -1,9 +1,10 @@
-import { screen, waitFor } from "@testing-library/react"
+import { screen, waitFor, within } from "@testing-library/react"
 import userEvent from "@testing-library/user-event"
 import { beforeEach, describe, expect, it, vi } from "vitest"
 
 const userPageMocks = vi.hoisted(() => ({
   createUser: vi.fn(),
+  createUsersBulk: vi.fn(),
   deleteUser: vi.fn(),
   deleteUserActivity: vi.fn(),
   fetchOrganizations: vi.fn(),
@@ -23,6 +24,7 @@ const userPageMocks = vi.hoisted(() => ({
 
 vi.mock("@/lib/admin-client", () => ({
   createUser: userPageMocks.createUser,
+  createUsersBulk: userPageMocks.createUsersBulk,
   deleteUser: userPageMocks.deleteUser,
   deleteUserActivity: userPageMocks.deleteUserActivity,
   fetchOrganizations: userPageMocks.fetchOrganizations,
@@ -48,6 +50,7 @@ import { renderWithProviders } from "@/test/test-utils"
 
 const {
   createUser,
+  createUsersBulk,
   deleteUser,
   deleteUserActivity,
   fetchOrganizations,
@@ -105,6 +108,15 @@ const users = [
   },
 ]
 
+const secondaryUser = {
+  id: "user-2",
+  organizationId: "org-1",
+  email: "assistant@example.com",
+  status: "active",
+  createdAt: "2026-03-02T09:00:00Z",
+  updatedAt: "2026-03-02T09:00:00Z",
+}
+
 const rolesCatalog = {
   global: [
     { code: "user", label: "Utilisateur" },
@@ -129,9 +141,49 @@ const userAccess = {
   effectivePermissions: ["feature.settings"],
 }
 
+const secondaryUserAccess = {
+  user: secondaryUser,
+  globalRoles: ["user"],
+  orgRoles: ["org_member"],
+  overrides: [],
+  effectivePermissions: ["feature.settings"],
+}
+
+function buildActivitySummary(user: { id: string; organizationId: string; email: string; status: string; createdAt: string; updatedAt: string }) {
+  return {
+    user,
+    range: {
+      from: "2026-03-01",
+      to: "2026-03-31",
+    },
+    totals: {
+      transcriptions: 1,
+      reports: 0,
+    },
+    byDay: [
+      {
+        day: "2026-03-01",
+        transcriptions: 1,
+        reports: 0,
+      },
+    ],
+    breakdown: {
+      transcriptionsByMode: {
+        local: 1,
+      },
+      transcriptionsByProvider: {
+        local_upload: 1,
+      },
+      reportsByMode: {},
+      reportsByProvider: {},
+    },
+  }
+}
+
 describe("UsersPage", () => {
   beforeEach(() => {
     createUser.mockReset()
+    createUsersBulk.mockReset()
     deleteUser.mockReset()
     deleteUserActivity.mockReset()
     fetchOrganizations.mockReset()
@@ -153,41 +205,20 @@ describe("UsersPage", () => {
     fetchUsersByOrganization.mockResolvedValue(users)
     fetchRolesCatalog.mockResolvedValue(rolesCatalog)
     fetchPermissionsCatalog.mockResolvedValue(permissionsCatalog)
-    fetchUserActivitySummary.mockResolvedValue({
-      user: {
-        ...users[0],
-      },
-      range: {
-        from: "2026-03-01",
-        to: "2026-03-31",
-      },
-      totals: {
-        transcriptions: 1,
-        reports: 0,
-      },
-      byDay: [
-        {
-          day: "2026-03-01",
-          transcriptions: 1,
-          reports: 0,
-        },
-      ],
-      breakdown: {
-        transcriptionsByMode: {
-          local: 1,
-        },
-        transcriptionsByProvider: {
-          local_upload: 1,
-        },
-        reportsByMode: {},
-        reportsByProvider: {},
-      },
-    })
-    fetchUserAccess.mockResolvedValue(userAccess)
+    fetchUserActivitySummary.mockImplementation(async (userId: string) =>
+      Promise.resolve(userId === users[0].id ? buildActivitySummary(users[0]) : buildActivitySummary(secondaryUser)),
+    )
+    fetchUserAccess.mockImplementation(async (userId: string) =>
+      Promise.resolve(userId === users[0].id ? userAccess : secondaryUserAccess),
+    )
     createUser.mockResolvedValue({
       ...users[0],
       id: "user-2",
       email: "nouveau@example.com",
+    })
+    createUsersBulk.mockResolvedValue({
+      created: [],
+      failed: [],
     })
     deleteUser.mockResolvedValue(undefined)
     sendUserPasswordResetEmail.mockResolvedValue(undefined)
@@ -216,6 +247,102 @@ describe("UsersPage", () => {
         status: "active",
       }),
     )
+  })
+
+  it("creates multiple users from the bulk textarea and displays the result", async () => {
+    const user = userEvent.setup()
+    createUsersBulk.mockResolvedValue({
+      created: [
+        {
+          id: "user-2",
+          email: "bulk.one@example.com",
+          status: "active",
+        },
+        {
+          id: "user-3",
+          email: "bulk.two@example.com",
+          status: "active",
+        },
+      ],
+      failed: [
+        {
+          email: "bad@example.com",
+          error: "invalid email",
+        },
+      ],
+    })
+
+    renderWithProviders(<UsersPage />, {
+      route: "/users?org=org-1&user=user-1",
+    })
+
+    await screen.findByText("medecin@example.com")
+    await user.type(
+      screen.getByLabelText("Emails", { selector: "#bulk-user-emails" }),
+      "bulk.one@example.com\nbulk.two@example.com, bulk.one@example.com;bad@example.com",
+    )
+    await user.click(screen.getByRole("button", { name: "Créer les comptes" }))
+
+    await waitFor(() =>
+      expect(createUsersBulk).toHaveBeenCalledWith("org-1", [
+        "bulk.one@example.com",
+        "bulk.two@example.com",
+        "bad@example.com",
+      ]),
+    )
+    await screen.findByText("2 comptes créés, 1 échec.")
+    expect(screen.getByText("Comptes créés")).toBeInTheDocument()
+    expect(screen.getByText("Échecs")).toBeInTheDocument()
+    expect(screen.getByText("bulk.one@example.com")).toBeInTheDocument()
+    expect(screen.getByText("bad@example.com")).toBeInTheDocument()
+  })
+
+  it("deletes a user from the table and selects the next visible user", async () => {
+    const user = userEvent.setup()
+    fetchUsersByOrganization.mockResolvedValueOnce([users[0], secondaryUser]).mockResolvedValueOnce([secondaryUser])
+
+    renderWithProviders(<UsersPage />, {
+      route: "/users?org=org-1&user=user-1",
+    })
+
+    const firstUserEmail = await screen.findByText("medecin@example.com")
+    const row = firstUserEmail.closest("tr")
+    expect(row).not.toBeNull()
+    const rowElement = row as HTMLTableRowElement
+
+    await user.click(within(rowElement).getByRole("button", { name: "Supprimer" }))
+    expect(within(rowElement).getByRole("button", { name: "Annuler" })).toBeInTheDocument()
+    expect(
+      within(rowElement).getByRole("button", { name: "Confirmer la suppression" }),
+    ).toBeInTheDocument()
+
+    await user.click(within(rowElement).getByRole("button", { name: "Confirmer la suppression" }))
+
+    await waitFor(() => expect(deleteUser).toHaveBeenCalledWith("user-1"))
+    await screen.findByText("Utilisateur supprimé.")
+    expect(screen.queryByText("medecin@example.com")).not.toBeInTheDocument()
+    expect(screen.getByText(/Compte ciblé: user-2\./)).toBeInTheDocument()
+    expect(screen.getByRole("button", { name: "Sélectionné" })).toBeInTheDocument()
+  })
+
+  it("surfaces backend delete errors from the table action", async () => {
+    const user = userEvent.setup()
+    deleteUser.mockRejectedValueOnce(new Error("cannot delete the last active super admin"))
+
+    renderWithProviders(<UsersPage />, {
+      route: "/users?org=org-1&user=user-1",
+    })
+
+    const firstUserEmail = await screen.findByText("medecin@example.com")
+    const row = firstUserEmail.closest("tr")
+    expect(row).not.toBeNull()
+    const rowElement = row as HTMLTableRowElement
+
+    await user.click(within(rowElement).getByRole("button", { name: "Supprimer" }))
+    await user.click(within(rowElement).getByRole("button", { name: "Confirmer la suppression" }))
+
+    await screen.findByText("cannot delete the last active super admin")
+    expect(within(rowElement).getByRole("button", { name: "Annuler" })).toBeInTheDocument()
   })
 
   it("updates profile, password, global roles and overrides", async () => {

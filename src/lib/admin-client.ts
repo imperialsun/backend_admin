@@ -1,6 +1,7 @@
 import { clearAdminCsrfToken, setAdminCsrfToken } from "@/lib/admin-security"
 import { AdminHttpError, requestJson, requestNoContent } from "@/lib/admin-api"
 import type {
+  BulkCreateUsersResponse,
   ActivitySummary,
   AdminSessionPayload,
   Organization,
@@ -130,6 +131,13 @@ export async function createUser(organizationId: string, input: CreateUserInput)
   return requestJson<User>(`/admin/organizations/${organizationId}/users`, {
     method: "POST",
     body: JSON.stringify(input),
+  })
+}
+
+export async function createUsersBulk(organizationId: string, emails: string[]) {
+  return requestJson<BulkCreateUsersResponse>(`/admin/organizations/${organizationId}/users/bulk`, {
+    method: "POST",
+    body: JSON.stringify({ emails }),
   })
 }
 

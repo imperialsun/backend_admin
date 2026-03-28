@@ -1,4 +1,4 @@
-import { Activity, Building2, Home, ShieldCheck, Users } from "lucide-react"
+import { Activity, Building2, Home, Users } from "lucide-react"
 import { NavLink } from "react-router-dom"
 
 import { Badge } from "@/components/ui/badge"
@@ -17,10 +17,12 @@ export function Sidebar() {
 
   return (
     <aside className="border-b border-border/70 bg-card/75 p-4 backdrop-blur md:min-h-screen md:w-72 md:border-b-0 md:border-r">
-      <div className="mb-6 flex items-center gap-3">
-        <div className="flex h-12 w-12 items-center justify-center rounded-2xl bg-primary/12 text-primary">
-          <ShieldCheck className="h-6 w-6" />
-        </div>
+      <div className="mb-6 space-y-3">
+        <img
+          alt="Logo Demeter Santé"
+          className="h-12 w-auto max-w-[180px] object-contain"
+          src="/logo.png"
+        />
         <div>
           <p className="text-xs uppercase tracking-[0.24em] text-muted-foreground">Transcode</p>
           <h1 className="text-xl font-semibold">Admin Panel</h1>

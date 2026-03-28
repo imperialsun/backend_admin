@@ -39,6 +39,23 @@ export interface User {
   updatedAt: string
 }
 
+export interface BulkCreatedUser {
+  id: string
+  email: string
+  status: string
+}
+
+export interface BulkFailedUser {
+  email: string
+  error: string
+  userId?: string
+}
+
+export interface BulkCreateUsersResponse {
+  created: BulkCreatedUser[]
+  failed: BulkFailedUser[]
+}
+
 export interface RoleCatalogItem {
   code: string
   label: string

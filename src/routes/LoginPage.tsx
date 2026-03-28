@@ -1,5 +1,4 @@
 import { Link, Navigate, useLocation, useNavigate } from "react-router-dom"
-import { ShieldCheck } from "lucide-react"
 import { useState } from "react"
 
 import { Button } from "@/components/ui/button"
@@ -46,12 +45,16 @@ export default function LoginPage() {
     <div className="relative flex min-h-screen items-center justify-center overflow-hidden px-4 py-10">
       <div className="absolute inset-0 bg-[radial-gradient(circle_at_top_right,rgba(222,102,12,0.22),transparent_22%),radial-gradient(circle_at_bottom_left,rgba(24,72,112,0.12),transparent_26%)]" />
       <Card className="relative z-10 w-full max-w-lg border-white/40 bg-white/92">
-        <CardHeader>
-          <div className="mb-4 flex h-14 w-14 items-center justify-center rounded-2xl bg-primary/12 text-primary">
-            <ShieldCheck className="h-7 w-7" />
+        <CardHeader className="text-center">
+          <div className="mb-2 flex justify-center">
+            <img
+              alt="Logo Demeter Santé"
+              className="h-20 w-auto max-w-[240px] object-contain sm:h-24"
+              src="/logo.png"
+            />
           </div>
           <CardTitle>Connexion administrateur</CardTitle>
-          <CardDescription>
+          <CardDescription className="mx-auto max-w-md">
             Cette interface n’utilise que la session admin dédiée du backend. Aucune donnée sensible n’est stockée dans le navigateur.
           </CardDescription>
         </CardHeader>

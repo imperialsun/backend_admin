@@ -9,8 +9,10 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { Table, TableWrapper } from "@/components/ui/table"
+import { Textarea } from "@/components/ui/textarea"
 import {
   createUser,
+  createUsersBulk,
   deleteUser,
   deleteUserActivity,
   fetchOrganizations,
@@ -31,6 +33,7 @@ import type {
   PermissionOverride,
   RoleCatalogItem,
   RolesCatalog,
+  BulkCreateUsersResponse,
   User,
   UserAccessResponse,
 } from "@/lib/types"
@@ -50,6 +53,7 @@ type ProfileUpdateInput = {
 }
 
 type OverrideState = Record<string, "inherit" | "allow" | "deny">
+type BulkProvisioningResult = BulkCreateUsersResponse | null
 
 const defaultUserForm: UserForm = {
   email: "",
@@ -74,6 +78,26 @@ function toggleCode(codes: string[], code: string) {
     return codes.filter((value) => value !== code)
   }
   return [...codes, code].sort()
+}
+
+function parseBulkEmails(value: string) {
+  const seen = new Set<string>()
+  const emails: string[] = []
+
+  for (const token of value.split(/[\n,;]+/)) {
+    const trimmed = token.trim()
+    if (!trimmed) {
+      continue
+    }
+    const normalized = trimmed.toLowerCase()
+    if (seen.has(normalized)) {
+      continue
+    }
+    seen.add(normalized)
+    emails.push(trimmed)
+  }
+
+  return emails
 }
 
 function toOverrideState(overrides: PermissionOverride[]) {
@@ -665,6 +689,10 @@ export default function UsersPage() {
   const { isSuperAdmin, session } = useAdminSession()
   const [createForm, setCreateForm] = useState<UserForm>(defaultUserForm)
   const [feedback, setFeedback] = useState<string | null>(null)
+  const [bulkEmailsInput, setBulkEmailsInput] = useState("")
+  const [bulkFeedback, setBulkFeedback] = useState<string | null>(null)
+  const [bulkResult, setBulkResult] = useState<BulkProvisioningResult>(null)
+  const [deleteConfirmUserId, setDeleteConfirmUserId] = useState<string | null>(null)
 
   const organizationFilter = isSuperAdmin ? searchParams.get("org") ?? "" : session?.organization.id ?? ""
   const searchFilter = searchParams.get("q") ?? ""
@@ -720,6 +748,8 @@ export default function UsersPage() {
     queryFn: () => fetchUserAccess(selectedUser!.id),
   })
 
+  const bulkEmails = useMemo(() => parseBulkEmails(bulkEmailsInput), [bulkEmailsInput])
+
   const createMutation = useMutation({
     mutationFn: () => createUser(organizationFilter, createForm),
     onSuccess: async (created) => {
@@ -731,6 +761,36 @@ export default function UsersPage() {
         q: searchFilter,
         user: created.id,
       })
+    },
+  })
+
+  const bulkCreateMutation = useMutation({
+    mutationFn: async () => {
+      if (!organizationFilter) {
+        throw new Error("Sélectionnez d abord une organisation.")
+      }
+      if (bulkEmails.length === 0) {
+        throw new Error("Ajoutez au moins une adresse email.")
+      }
+      return createUsersBulk(organizationFilter, bulkEmails)
+    },
+    onSuccess: async (result) => {
+      setBulkResult(result)
+      setBulkEmailsInput("")
+      setBulkFeedback(
+        `${result.created.length} compte${result.created.length > 1 ? "s" : ""} créé${result.created.length > 1 ? "s" : ""}, ${result.failed.length} échec${result.failed.length > 1 ? "s" : ""}.`,
+      )
+      await queryClient.invalidateQueries({ queryKey: usersQueryKey })
+      if (result.created[0]) {
+        setUsersSearchParams({
+          org: organizationFilter,
+          q: searchFilter,
+          user: result.created[0].id,
+        })
+      }
+    },
+    onError: (error) => {
+      setBulkFeedback(error instanceof Error ? error.message : "Impossible de créer les utilisateurs en lot.")
     },
   })
 
@@ -773,6 +833,7 @@ export default function UsersPage() {
       return user
     },
     onSuccess: async (deletedUser) => {
+      setDeleteConfirmUserId(null)
       const currentUsers = queryClient.getQueryData<User[]>(usersQueryKey) ?? []
       const remainingUsers = currentUsers.filter((user) => user.id !== deletedUser.id)
       const nextVisibleUser = filterUsersBySearch(remainingUsers, searchFilter)[0]
@@ -975,6 +1036,91 @@ export default function UsersPage() {
 
       <div className="grid gap-6 xl:grid-cols-[1.05fr_0.95fr]">
         <div className="space-y-6">
+          <Card>
+            <CardHeader>
+              <CardTitle>Création en lot</CardTitle>
+              <CardDescription>
+                Collez plusieurs adresses email. Les séparateurs `,`, `;` et les retours ligne sont acceptés. Chaque
+                compte reçoit un mot de passe temporaire envoyé par email.
+              </CardDescription>
+            </CardHeader>
+            <CardContent className="space-y-4">
+              <div className="space-y-2">
+                <Label htmlFor="bulk-user-emails">Emails</Label>
+                <Textarea
+                  id="bulk-user-emails"
+                  onChange={(event) => setBulkEmailsInput(event.target.value)}
+                  placeholder={"user1@example.com\nuser2@example.com"}
+                  value={bulkEmailsInput}
+                />
+                <p className="text-xs text-muted-foreground">
+                  {bulkEmails.length} adresse{bulkEmails.length > 1 ? "s" : ""} prête
+                  {bulkEmails.length > 1 ? "s" : ""} à être créée{bulkEmails.length > 1 ? "s" : ""}.
+                </p>
+              </div>
+              <div className="flex flex-wrap items-center justify-between gap-3">
+                <p className="text-sm text-muted-foreground">
+                  Les doublons dans le champ sont ignorés avant l’envoi.
+                </p>
+                <Button
+                  disabled={bulkCreateMutation.isPending || !organizationFilter || bulkEmails.length === 0}
+                  onClick={() => {
+                    setBulkFeedback(null)
+                    setBulkResult(null)
+                    void bulkCreateMutation.mutateAsync()
+                  }}
+                >
+                  {bulkCreateMutation.isPending ? "Création..." : "Créer les comptes"}
+                </Button>
+              </div>
+              {bulkFeedback ? <p className="text-sm text-muted-foreground">{bulkFeedback}</p> : null}
+              {bulkResult ? (
+                <div className="grid gap-4">
+                  <div className="flex flex-wrap gap-2">
+                    <Badge variant="success">
+                      {bulkResult.created.length} créé{bulkResult.created.length > 1 ? "s" : ""}
+                    </Badge>
+                    <Badge variant="danger">
+                      {bulkResult.failed.length} échec{bulkResult.failed.length > 1 ? "s" : ""}
+                    </Badge>
+                  </div>
+                  {bulkResult.created.length > 0 ? (
+                    <div className="space-y-2">
+                      <p className="text-sm font-medium">Comptes créés</p>
+                      <ul className="space-y-2">
+                        {bulkResult.created.map((item) => (
+                          <li className="rounded-2xl border border-border/70 bg-muted/40 px-4 py-3 text-sm" key={item.id}>
+                            <span className="font-medium">{item.email}</span>
+                            <span className="ml-2 text-muted-foreground">({item.status})</span>
+                          </li>
+                        ))}
+                      </ul>
+                    </div>
+                  ) : null}
+                  {bulkResult.failed.length > 0 ? (
+                    <div className="space-y-2">
+                      <p className="text-sm font-medium">Échecs</p>
+                      <ul className="space-y-2">
+                        {bulkResult.failed.map((item) => (
+                          <li
+                            className="rounded-2xl border border-destructive/30 bg-destructive/5 px-4 py-3 text-sm"
+                            key={`${item.email}-${item.error}`}
+                          >
+                            <span className="font-medium">{item.email}</span>
+                            <span className="ml-2 text-muted-foreground">{item.error}</span>
+                            {item.userId ? (
+                              <span className="mt-1 block text-xs text-muted-foreground">Utilisateur: {item.userId}</span>
+                            ) : null}
+                          </li>
+                        ))}
+                      </ul>
+                    </div>
+                  ) : null}
+                </div>
+              ) : null}
+            </CardContent>
+          </Card>
+
           <TableWrapper>
             <Table>
               <thead className="bg-background/80 text-xs uppercase tracking-[0.2em] text-muted-foreground">
@@ -1001,6 +1147,7 @@ export default function UsersPage() {
                 ) : (
                   filteredUsers.map((user) => {
                     const selected = selectedUser?.id === user.id
+                    const isDeleteConfirmOpen = deleteConfirmUserId === user.id
 
                     return (
                       <tr className="border-t border-border/70" key={user.id}>
@@ -1013,19 +1160,67 @@ export default function UsersPage() {
                         </td>
                         <td className="px-6 py-4">{formatDateTime(user.createdAt)}</td>
                         <td className="px-6 py-4">
-                          <Button
-                            onClick={() =>
-                              setUsersSearchParams({
-                                org: organizationFilter,
-                                q: searchFilter,
-                                user: user.id,
-                              })
-                            }
-                            size="sm"
-                            variant={selected ? "primary" : "secondary"}
-                          >
-                            {selected ? "Sélectionné" : "Gérer"}
-                          </Button>
+                          {isDeleteConfirmOpen ? (
+                            <div className="flex flex-wrap gap-2">
+                              <Button
+                                disabled={deleteMutation.isPending}
+                                onClick={() => setDeleteConfirmUserId(null)}
+                                size="sm"
+                                variant="secondary"
+                              >
+                                Annuler
+                              </Button>
+                              <Button
+                                disabled={deleteMutation.isPending}
+                                onClick={() => {
+                                  setFeedback(null)
+                                  void (async () => {
+                                    try {
+                                      await deleteMutation.mutateAsync(user)
+                                    } catch (error) {
+                                      setFeedback(
+                                        error instanceof Error
+                                          ? error.message
+                                          : "Impossible de supprimer l’utilisateur.",
+                                      )
+                                    }
+                                  })()
+                                }}
+                                size="sm"
+                                variant="danger"
+                              >
+                                Confirmer la suppression
+                              </Button>
+                            </div>
+                          ) : (
+                            <div className="flex flex-wrap gap-2">
+                              <Button
+                                onClick={() => {
+                                  setDeleteConfirmUserId(null)
+                                  setUsersSearchParams({
+                                    org: organizationFilter,
+                                    q: searchFilter,
+                                    user: user.id,
+                                  })
+                                }}
+                                size="sm"
+                                variant={selected ? "primary" : "secondary"}
+                              >
+                                {selected ? "Sélectionné" : "Gérer"}
+                              </Button>
+                              <Button
+                                disabled={deleteMutation.isPending}
+                                onClick={() => {
+                                  setFeedback(null)
+                                  setDeleteConfirmUserId(user.id)
+                                }}
+                                size="sm"
+                                variant="danger"
+                              >
+                                Supprimer
+                              </Button>
+                            </div>
+                          )}
                         </td>
                       </tr>
                     )
