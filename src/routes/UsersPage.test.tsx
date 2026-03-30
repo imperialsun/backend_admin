@@ -130,8 +130,19 @@ const rolesCatalog = {
 }
 
 const permissionsCatalog = [
+  { code: "feature.localupload", label: "Local upload", scope: "feature" },
+  { code: "feature.cloudupload", label: "Cloud upload", scope: "feature" },
+  { code: "feature.llmlocal", label: "LLM local", scope: "feature" },
+  { code: "feature.llmapi", label: "LLM cloud", scope: "feature" },
   { code: "feature.admin", label: "Admin panel", scope: "global" },
   { code: "feature.settings", label: "Settings", scope: "organization" },
+  { code: "feature.telemetry", label: "Telemetry", scope: "organization" },
+  { code: "provider.cloud.whisper", label: "Cloud Whisper", scope: "provider_cloud" },
+  { code: "provider.cloud.mistral", label: "Cloud Mistral", scope: "provider_cloud" },
+  { code: "provider.cloud.demeter_sante", label: "Cloud Demeter Sante", scope: "provider_cloud" },
+  { code: "provider.llm.huggingface", label: "LLM Hugging Face", scope: "provider_llm" },
+  { code: "provider.llm.mistral", label: "LLM Mistral", scope: "provider_llm" },
+  { code: "provider.llm.demeter_sante", label: "LLM Demeter Sante", scope: "provider_llm" },
 ]
 
 const userAccess = {
@@ -270,6 +281,17 @@ describe("UsersPage", () => {
     )
   })
 
+  it("defaults the bulk permission template to Cloud Demeter Only", async () => {
+    renderWithProviders(<UsersPage />, {
+      route: "/users?org=org-1",
+    })
+
+    await screen.findByText("medecin@example.com")
+    expect(screen.getByLabelText("Modèle de permissions")).toHaveValue("cloud_demeter_only")
+    expect(screen.getByLabelText("Override feature.cloudupload")).toHaveValue("allow")
+    expect(screen.getByLabelText("Override feature.settings")).toHaveValue("deny")
+  })
+
   it("creates multiple users from the bulk textarea and displays the result", async () => {
     const user = userEvent.setup()
     createUsersBulk.mockResolvedValue({
@@ -298,6 +320,9 @@ describe("UsersPage", () => {
     })
 
     await screen.findByText("medecin@example.com")
+    await user.selectOptions(screen.getByLabelText("Modèle de permissions"), "full")
+    expect(screen.getByLabelText("Override feature.settings")).toHaveValue("allow")
+    await user.selectOptions(screen.getByLabelText("Override feature.settings"), "deny")
     await user.type(
       screen.getByLabelText("Emails", { selector: "#bulk-user-emails" }),
       "bulk.one@example.com\nbulk.two@example.com, bulk.one@example.com;bad@example.com",
@@ -305,11 +330,14 @@ describe("UsersPage", () => {
     await user.click(screen.getByRole("button", { name: "Créer les comptes" }))
 
     await waitFor(() =>
-      expect(createUsersBulk).toHaveBeenCalledWith("org-1", [
-        "bulk.one@example.com",
-        "bulk.two@example.com",
-        "bad@example.com",
-      ]),
+      expect(createUsersBulk).toHaveBeenCalledWith(
+        "org-1",
+        ["bulk.one@example.com", "bulk.two@example.com", "bad@example.com"],
+        expect.arrayContaining([
+          { permissionCode: "feature.cloudupload", effect: "allow" },
+          { permissionCode: "feature.settings", effect: "deny" },
+        ]),
+      ),
     )
     await screen.findByText("2 comptes créés, 1 échec.")
     expect(screen.getByText("Comptes créés")).toBeInTheDocument()
@@ -372,7 +400,7 @@ describe("UsersPage", () => {
       route: "/users?org=org-1",
     })
 
-    await openUserDetail(user, "medecin@example.com")
+    const dialog = await openUserDetail(user, "medecin@example.com")
 
     const emailInput = screen.getByLabelText("Email", { selector: "#user-email" })
     await user.clear(emailInput)
@@ -404,7 +432,7 @@ describe("UsersPage", () => {
     await user.click(screen.getByRole("button", { name: "Enregistrer les rôles globaux" }))
     await waitFor(() => expect(updateUserGlobalRoles).toHaveBeenCalledWith("user-1", ["super_admin", "user"]))
 
-    await user.selectOptions(screen.getByLabelText("Override feature.admin"), "allow")
+    await user.selectOptions(within(dialog).getByLabelText("Override feature.admin"), "allow")
     await user.click(screen.getByRole("button", { name: "Enregistrer les overrides" }))
     await waitFor(() =>
       expect(updateUserEntitlements).toHaveBeenCalledWith("user-1", [

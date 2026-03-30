@@ -57,6 +57,73 @@ type ProfileUpdateInput = {
 
 type OverrideState = Record<string, "inherit" | "allow" | "deny">
 type BulkProvisioningResult = BulkCreateUsersResponse | null
+type BulkPermissionPresetKey = "cloud_demeter_only" | "cloud_only" | "full"
+
+const bulkPermissionPresetOptions: Array<{ value: BulkPermissionPresetKey; label: string }> = [
+  { value: "cloud_demeter_only", label: "Cloud Demeter Only" },
+  { value: "cloud_only", label: "Cloud Only" },
+  { value: "full", label: "Full" },
+]
+
+const bulkAppFeaturePermissionCodes = [
+  "feature.localupload",
+  "feature.cloudupload",
+  "feature.llmlocal",
+  "feature.llmapi",
+  "feature.settings",
+  "feature.telemetry",
+]
+
+const bulkCloudProviderPermissionCodes = [
+  "provider.cloud.whisper",
+  "provider.cloud.mistral",
+  "provider.cloud.demeter_sante",
+]
+
+const bulkLlmProviderPermissionCodes = [
+  "provider.llm.huggingface",
+  "provider.llm.mistral",
+  "provider.llm.demeter_sante",
+]
+
+function buildBulkPermissionOverrides(preset: BulkPermissionPresetKey): OverrideState {
+  const state: OverrideState = {}
+  const allow = (codes: string[]) => {
+    for (const code of codes) {
+      state[code] = "allow"
+    }
+  }
+  const deny = (codes: string[]) => {
+    for (const code of codes) {
+      state[code] = "deny"
+    }
+  }
+
+  switch (preset) {
+    case "cloud_demeter_only":
+      allow(["feature.cloudupload", "feature.llmapi", "provider.cloud.demeter_sante", "provider.llm.demeter_sante"])
+      deny([
+        "feature.localupload",
+        "feature.llmlocal",
+        "feature.settings",
+        "feature.telemetry",
+        "provider.cloud.whisper",
+        "provider.cloud.mistral",
+        "provider.llm.huggingface",
+        "provider.llm.mistral",
+      ])
+      break
+    case "cloud_only":
+      allow(["feature.cloudupload", "feature.llmapi", ...bulkCloudProviderPermissionCodes, ...bulkLlmProviderPermissionCodes])
+      deny(["feature.localupload", "feature.llmlocal", "feature.settings", "feature.telemetry"])
+      break
+    case "full":
+      allow([...bulkAppFeaturePermissionCodes, ...bulkCloudProviderPermissionCodes, ...bulkLlmProviderPermissionCodes])
+      break
+  }
+
+  return state
+}
 
 const defaultUserForm: UserForm = {
   email: "",
@@ -768,6 +835,10 @@ export default function UsersPage() {
   const [createForm, setCreateForm] = useState<UserForm>(defaultUserForm)
   const [feedback, setFeedback] = useState<string | null>(null)
   const [bulkEmailsInput, setBulkEmailsInput] = useState("")
+  const [bulkPermissionPreset, setBulkPermissionPreset] = useState<BulkPermissionPresetKey>("cloud_demeter_only")
+  const [bulkPermissionOverrides, setBulkPermissionOverrides] = useState<OverrideState>(
+    () => buildBulkPermissionOverrides("cloud_demeter_only"),
+  )
   const [bulkFeedback, setBulkFeedback] = useState<string | null>(null)
   const [bulkResult, setBulkResult] = useState<BulkProvisioningResult>(null)
   const [deleteConfirmUserId, setDeleteConfirmUserId] = useState<string | null>(null)
@@ -850,7 +921,7 @@ export default function UsersPage() {
       if (bulkEmails.length === 0) {
         throw new Error("Ajoutez au moins une adresse email.")
       }
-      return createUsersBulk(organizationFilter, bulkEmails)
+      return createUsersBulk(organizationFilter, bulkEmails, toOverridePayload(bulkPermissionOverrides))
     },
     onSuccess: async (result) => {
       setBulkResult(result)
@@ -1143,6 +1214,40 @@ export default function UsersPage() {
                 {bulkEmails.length > 1 ? "s" : ""} à être créée{bulkEmails.length > 1 ? "s" : ""}.
               </p>
             </div>
+            <div className="space-y-2">
+              <Label htmlFor="bulk-permission-preset">Modèle de permissions</Label>
+              <select
+                className="h-11 w-full rounded-2xl border border-border bg-background px-4 text-sm"
+                id="bulk-permission-preset"
+                onChange={(event) => {
+                  const nextPreset = event.target.value as BulkPermissionPresetKey
+                  setBulkPermissionPreset(nextPreset)
+                  setBulkPermissionOverrides(buildBulkPermissionOverrides(nextPreset))
+                }}
+                value={bulkPermissionPreset}
+              >
+                {bulkPermissionPresetOptions.map((option) => (
+                  <option key={option.value} value={option.value}>
+                    {option.label}
+                  </option>
+                ))}
+              </select>
+              <p className="text-xs text-muted-foreground">
+                Le modèle remplit les overrides pour tout le lot. Vous pouvez ensuite ajuster chaque permission
+                manuellement avant la création.
+              </p>
+            </div>
+            <PermissionOverridesEditor
+              catalog={permissionsCatalogQuery.data ?? []}
+              disabled={bulkCreateMutation.isPending}
+              onChange={(permissionCode, nextEffect) =>
+                setBulkPermissionOverrides((current) => ({
+                  ...current,
+                  [permissionCode]: nextEffect,
+                }))
+              }
+              overrides={bulkPermissionOverrides}
+            />
             <div className="flex flex-wrap items-center justify-between gap-3">
               <p className="text-sm text-muted-foreground">Les doublons dans le champ sont ignorés avant l’envoi.</p>
               <Button

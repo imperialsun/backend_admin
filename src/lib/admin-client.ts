@@ -146,10 +146,14 @@ export async function createUser(organizationId: string, input: CreateUserInput)
   })
 }
 
-export async function createUsersBulk(organizationId: string, emails: string[]) {
+export async function createUsersBulk(
+  organizationId: string,
+  emails: string[],
+  overrides: PermissionOverride[] = [],
+) {
   return requestJson<BulkCreateUsersResponse>(`/admin/organizations/${organizationId}/users/bulk`, {
     method: "POST",
-    body: JSON.stringify({ emails }),
+    body: JSON.stringify({ emails, overrides }),
   })
 }
 

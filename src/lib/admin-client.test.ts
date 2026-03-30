@@ -177,14 +177,21 @@ describe("admin-client", () => {
       failed: [],
     })
 
-    await expect(createUsersBulk("org-1", ["bulk@example.com"])).resolves.toMatchObject({
+    await expect(
+      createUsersBulk("org-1", ["bulk@example.com"], [
+        { permissionCode: "feature.settings", effect: "deny" },
+      ]),
+    ).resolves.toMatchObject({
       created: [{ email: "bulk@example.com" }],
     })
     expect(requestJson).toHaveBeenCalledWith(
       "/admin/organizations/org-1/users/bulk",
       expect.objectContaining({
         method: "POST",
-        body: JSON.stringify({ emails: ["bulk@example.com"] }),
+        body: JSON.stringify({
+          emails: ["bulk@example.com"],
+          overrides: [{ permissionCode: "feature.settings", effect: "deny" }],
+        }),
       }),
     )
   })
