@@ -3,6 +3,7 @@ import { Navigate, Outlet, Route, Routes, useLocation } from "react-router-dom"
 import { AppShell } from "@/components/layout/AppShell"
 import { useAdminSession } from "@/lib/use-admin-session"
 import ActivityPage from "@/routes/ActivityPage"
+import BackendErrorsPage from "@/routes/BackendErrorsPage"
 import DashboardPage from "@/routes/DashboardPage"
 import ForbiddenPage from "@/routes/ForbiddenPage"
 import ForgotPasswordPage from "@/routes/ForgotPasswordPage"
@@ -74,6 +75,14 @@ export default function App() {
         />
         <Route path="/users" element={<UsersPage />} />
         <Route path="/activity" element={<ActivityPage />} />
+        <Route
+          path="/backend-errors"
+          element={
+            <RequireSuperAdmin>
+              <BackendErrorsPage />
+            </RequireSuperAdmin>
+          }
+        />
         <Route path="/forbidden" element={<ForbiddenPage />} />
       </Route>
     </Routes>

@@ -38,8 +38,10 @@ import {
   adminLogout,
   adminRefresh,
   initializeAdminSession,
+  fetchBackendErrorEvents,
   createUsersBulk,
   fetchUserActivitySummary,
+  purgeBackendErrorEvents,
   sendUserPasswordResetEmail,
 } from "@/lib/admin-client"
 
@@ -228,6 +230,52 @@ describe("admin-client", () => {
     await expect(deleteUserActivity("user-42")).resolves.toBeUndefined()
     expect(requestNoContent).toHaveBeenCalledWith(
       "/admin/users/user-42/activity",
+      expect.objectContaining({ method: "DELETE" }),
+    )
+  })
+
+  it("fetches backend errors through the admin namespace", async () => {
+    requestJson.mockResolvedValue({
+      items: [],
+      total: 0,
+      page: 1,
+      pageSize: 25,
+    })
+
+    await expect(
+      fetchBackendErrorEvents({
+        from: "2026-03-01",
+        to: "2026-03-31",
+        component: "admin",
+        route: "/admin/backend-errors",
+        q: "boom",
+        organizationId: "org-1",
+        page: 2,
+        pageSize: 50,
+      }),
+    ).resolves.toMatchObject({ total: 0 })
+
+    expect(requestJson).toHaveBeenCalledWith(
+      "/admin/backend-errors?from=2026-03-01&to=2026-03-31&component=admin&route=%2Fadmin%2Fbackend-errors&q=boom&organizationId=org-1&page=2&pageSize=50",
+    )
+  })
+
+  it("purges backend errors through the admin namespace", async () => {
+    requestNoContent.mockResolvedValue(undefined)
+
+    await expect(
+      purgeBackendErrorEvents({
+        from: "2026-03-01",
+        to: "2026-03-31",
+        component: "admin",
+        route: "/admin/backend-errors",
+        q: "boom",
+        organizationId: "org-1",
+      }),
+    ).resolves.toBeUndefined()
+
+    expect(requestNoContent).toHaveBeenCalledWith(
+      "/admin/backend-errors?from=2026-03-01&to=2026-03-31&component=admin&route=%2Fadmin%2Fbackend-errors&q=boom&organizationId=org-1",
       expect.objectContaining({ method: "DELETE" }),
     )
   })

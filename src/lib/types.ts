@@ -136,3 +136,26 @@ export interface UserActivitySummary {
     reportsByProvider: Record<string, number>
   }
 }
+
+export interface BackendErrorEvent {
+  id: string
+  traceId: string
+  userId?: string
+  organizationId?: string
+  component: string
+  route: string
+  step: string
+  title: string
+  statusCode?: number
+  durationMs?: number
+  errorMessage?: string
+  payloadJson: string
+  createdAt: string
+}
+
+export interface BackendErrorEventsResponse {
+  items: BackendErrorEvent[]
+  total: number
+  page: number
+  pageSize: number
+}

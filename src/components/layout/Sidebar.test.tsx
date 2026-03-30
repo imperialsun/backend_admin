@@ -49,5 +49,16 @@ describe("Sidebar", () => {
 
     expect(screen.getByAltText("Logo Demeter Santé")).toHaveAttribute("src", "/logo.png")
     expect(screen.getByText("Admin Panel")).toBeInTheDocument()
+    expect(screen.getByRole("link", { name: "Erreurs backend" })).toHaveAttribute("href", "/backend-errors")
+  })
+
+  it("hides backend errors for non super admins", () => {
+    useAdminSession.mockReturnValue(sessionMock({ isSuperAdmin: false, globalRoles: ["user"] }))
+
+    renderWithProviders(<Sidebar />, {
+      route: "/dashboard",
+    })
+
+    expect(screen.queryByRole("link", { name: "Erreurs backend" })).not.toBeInTheDocument()
   })
 })

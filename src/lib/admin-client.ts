@@ -1,6 +1,7 @@
 import { clearAdminCsrfToken, setAdminCsrfToken } from "@/lib/admin-security"
 import { AdminHttpError, requestJson, requestNoContent } from "@/lib/admin-api"
 import type {
+  BackendErrorEventsResponse,
   BulkCreateUsersResponse,
   ActivitySummary,
   AdminSessionPayload,
@@ -36,6 +37,17 @@ type UpdateUserInput = {
   email?: string
   status?: string
   organizationId?: string
+}
+
+type BackendErrorEventsInput = {
+  from?: string
+  to?: string
+  component?: string
+  route?: string
+  q?: string
+  organizationId?: string
+  page?: number
+  pageSize?: number
 }
 
 function rememberSession(payload: AdminSessionPayload) {
@@ -209,6 +221,49 @@ export async function fetchActivitySummary(input: { from: string; to: string; or
     params.set("organizationId", input.organizationId)
   }
   return requestJson<ActivitySummary>(`/admin/activity/summary?${params.toString()}`)
+}
+
+function buildBackendErrorEventParams(input: BackendErrorEventsInput) {
+  const params = new URLSearchParams()
+  if (input.from?.trim()) {
+    params.set("from", input.from.trim())
+  }
+  if (input.to?.trim()) {
+    params.set("to", input.to.trim())
+  }
+  if (input.component?.trim()) {
+    params.set("component", input.component.trim())
+  }
+  if (input.route?.trim()) {
+    params.set("route", input.route.trim())
+  }
+  if (input.q?.trim()) {
+    params.set("q", input.q.trim())
+  }
+  if (input.organizationId?.trim()) {
+    params.set("organizationId", input.organizationId.trim())
+  }
+  if (typeof input.page === "number" && input.page > 0) {
+    params.set("page", String(input.page))
+  }
+  if (typeof input.pageSize === "number" && input.pageSize > 0) {
+    params.set("pageSize", String(input.pageSize))
+  }
+  return params
+}
+
+export async function fetchBackendErrorEvents(input: BackendErrorEventsInput) {
+  const params = buildBackendErrorEventParams(input)
+  const suffix = params.toString()
+  return requestJson<BackendErrorEventsResponse>(`/admin/backend-errors${suffix ? `?${suffix}` : ""}`)
+}
+
+export async function purgeBackendErrorEvents(input: BackendErrorEventsInput) {
+  const params = buildBackendErrorEventParams(input)
+  const suffix = params.toString()
+  return requestNoContent(`/admin/backend-errors${suffix ? `?${suffix}` : ""}`, {
+    method: "DELETE",
+  })
 }
 
 export async function fetchUserActivitySummary(userId: string, input: { from: string; to: string }) {

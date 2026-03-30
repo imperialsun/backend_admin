@@ -1,4 +1,4 @@
-import { Activity, Building2, Home, Users } from "lucide-react"
+import { Activity, Building2, Home, TriangleAlert, Users } from "lucide-react"
 import { NavLink } from "react-router-dom"
 
 import { Badge } from "@/components/ui/badge"
@@ -10,6 +10,7 @@ const navItems = [
   { to: "/organizations", label: "Organisations", icon: Building2, superAdminOnly: true },
   { to: "/users", label: "Utilisateurs", icon: Users, superAdminOnly: false },
   { to: "/activity", label: "Activité", icon: Activity, superAdminOnly: false },
+  { to: "/backend-errors", label: "Erreurs backend", icon: TriangleAlert, superAdminOnly: true },
 ]
 
 export function Sidebar() {

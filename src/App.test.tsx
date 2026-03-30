@@ -19,6 +19,7 @@ vi.mock("@/routes/DashboardPage", () => ({ default: () => <div>dashboard-page</d
 vi.mock("@/routes/OrganizationsPage", () => ({ default: () => <div>organizations-page</div> }))
 vi.mock("@/routes/UsersPage", () => ({ default: () => <div>users-page</div> }))
 vi.mock("@/routes/ActivityPage", () => ({ default: () => <div>activity-page</div> }))
+vi.mock("@/routes/BackendErrorsPage", () => ({ default: () => <div>backend-errors-page</div> }))
 vi.mock("@/routes/ForbiddenPage", () => ({ default: () => <div>forbidden-page</div> }))
 
 import App from "@/App"
@@ -93,5 +94,29 @@ describe("App routes", () => {
     )
 
     expect(screen.getByText("organizations-page")).toBeInTheDocument()
+  })
+
+  it("renders the backend error console route for super admins", () => {
+    useAdminSession.mockReturnValue(sessionMock())
+
+    render(
+      <MemoryRouter initialEntries={["/backend-errors"]}>
+        <App />
+      </MemoryRouter>,
+    )
+
+    expect(screen.getByText("backend-errors-page")).toBeInTheDocument()
+  })
+
+  it("redirects non super admin users away from backend errors", () => {
+    useAdminSession.mockReturnValue(sessionMock({ isSuperAdmin: false, globalRoles: ["user"] }))
+
+    render(
+      <MemoryRouter initialEntries={["/backend-errors"]}>
+        <App />
+      </MemoryRouter>,
+    )
+
+    expect(screen.getByText("forbidden-page")).toBeInTheDocument()
   })
 })
