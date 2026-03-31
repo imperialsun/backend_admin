@@ -1,5 +1,9 @@
 import { clearAdminCsrfToken, setAdminCsrfToken } from "@/lib/admin-security"
 import { AdminHttpError, requestJson, requestNoContent } from "@/lib/admin-api"
+import {
+  publishAdminSessionState,
+  setAdminSessionRefreshHandler,
+} from "@/lib/admin-session-refresh"
 import type {
   BackendErrorEventsResponse,
   BulkCreateUsersResponse,
@@ -52,6 +56,7 @@ type BackendErrorEventsInput = {
 
 function rememberSession(payload: AdminSessionPayload) {
   setAdminCsrfToken(payload.csrfToken)
+  publishAdminSessionState(payload)
   return payload
 }
 
@@ -59,6 +64,7 @@ export async function adminLogin(input: LoginRequest) {
   return rememberSession(
     await requestJson<AdminSessionPayload>("/admin/auth/login", {
       method: "POST",
+      allowSessionRefresh: false,
       body: JSON.stringify(input),
     }),
   )
@@ -67,6 +73,7 @@ export async function adminLogin(input: LoginRequest) {
 export async function adminRequestPasswordReset(email: string) {
   return requestNoContent("/admin/auth/forgot-password", {
     method: "POST",
+    allowSessionRefresh: false,
     body: JSON.stringify({ email }),
   })
 }
@@ -74,6 +81,7 @@ export async function adminRequestPasswordReset(email: string) {
 export async function adminResetPassword(token: string, password: string) {
   return requestNoContent("/admin/auth/reset-password", {
     method: "POST",
+    allowSessionRefresh: false,
     body: JSON.stringify({ token, password }),
   })
 }
@@ -87,10 +95,12 @@ export async function adminRefresh() {
     return rememberSession(
       await requestJson<AdminSessionPayload>("/admin/auth/refresh", {
         method: "POST",
+        allowSessionRefresh: false,
       }),
     )
   } catch (error) {
     clearAdminCsrfToken()
+    publishAdminSessionState(null)
     if (error instanceof AdminHttpError && error.status === 401) {
       return null
     }
@@ -99,21 +109,15 @@ export async function adminRefresh() {
 }
 
 export async function initializeAdminSession() {
-  try {
-    return await adminMe()
-  } catch (error) {
-    if (error instanceof AdminHttpError && error.status === 401) {
-      return adminRefresh()
-    }
-    throw error
-  }
+  return adminMe()
 }
 
 export async function adminLogout() {
   try {
-    await requestNoContent("/admin/auth/logout", { method: "POST" })
+    await requestNoContent("/admin/auth/logout", { method: "POST", allowSessionRefresh: false })
   } finally {
     clearAdminCsrfToken()
+    publishAdminSessionState(null)
   }
 }
 
@@ -283,3 +287,5 @@ export async function deleteUserActivity(userId: string) {
     method: "DELETE",
   })
 }
+
+setAdminSessionRefreshHandler(adminRefresh)

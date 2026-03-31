@@ -96,6 +96,18 @@ describe("admin api/client integration", () => {
     } satisfies Partial<AdminHttpError>)
   })
 
+  it("auto refreshes an expired admin session when a business route receives 401", async () => {
+    await adminLogin(backend.credentials)
+
+    transport.deleteCookieByExactPath("/api/v1/admin")
+    clearAdminCsrfToken()
+
+    const organizations = await fetchOrganizations()
+
+    expect(organizations.length).toBeGreaterThan(0)
+    expect(getAdminCsrfToken()).toBeTruthy()
+  })
+
   it("enforces real csrf and persists organization changes", async () => {
     await adminLogin(backend.credentials)
 

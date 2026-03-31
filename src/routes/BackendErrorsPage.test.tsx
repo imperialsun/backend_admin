@@ -66,6 +66,11 @@ describe("BackendErrorsPage", () => {
           durationMs: 32,
           errorMessage: "boom alpha",
           payloadJson: JSON.stringify({ error: "boom alpha" }),
+          annexJson: JSON.stringify({
+            provider: "demeter_sante",
+            retry: { attempted: true, succeeded: true, usedRawFile: true },
+          }),
+          recoveryStatus: "raw_retry_succeeded",
           createdAt: "2026-03-30T15:45:23Z",
         },
         {
@@ -100,8 +105,11 @@ describe("BackendErrorsPage", () => {
     await screen.findByText("2 événement(s) sur 1 page(s).")
     expect(screen.getByText("trace-alpha")).toBeInTheDocument()
     expect(screen.getAllByText("boom alpha").length).toBeGreaterThan(0)
+    expect(screen.getAllByText("Récupéré après retry brut").length).toBeGreaterThan(0)
+    expect(screen.getByText("Annexe frontend")).toBeInTheDocument()
     const payloadLabel = screen.getByText("Payload")
     expect(payloadLabel.nextElementSibling?.textContent).toContain('"error": "boom alpha"')
+    expect(screen.getByText(/"usedRawFile": true/)).toBeInTheDocument()
   })
 
   it("opens the purge confirmation and submits the current filter", async () => {

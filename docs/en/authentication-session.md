@@ -13,6 +13,8 @@ Used endpoints:
 - `/admin/auth/refresh`
 - `/admin/auth/logout`
 
+The shared admin HTTP layer retries protected admin requests once after a `401` by calling `/admin/auth/refresh` and replaying the original request with the refreshed CSRF token.
+
 ## Diagram: session lifecycle
 
 ```mermaid
@@ -72,6 +74,14 @@ Behavior:
 - initial loading: "Chargement du contexte administrateur" screen,
 - missing session: redirect to `/login`,
 - valid session but insufficient scope: redirect to `/forbidden`.
+
+## Protected route recovery
+
+If a protected admin route receives `401` during normal use:
+
+- `src/lib/admin-api.ts` attempts one automatic refresh,
+- the original request is replayed once with the new CSRF token,
+- if refresh still fails, the session is cleared and `RequireAuth` sends the user back to `/login`.
 
 ## Logout
 

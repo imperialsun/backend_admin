@@ -19,9 +19,9 @@ Demeter Admin Panel is a React/TypeScript SPA organized in layers:
 | --- | --- | --- |
 | Bootstrap | `src/main.tsx` | initializes React, React Query, and BrowserRouter |
 | Routing | `src/App.tsx` | protects routes and applies `RequireSuperAdmin` |
-| Session | `src/lib/admin-session-context.tsx` | calls `me`, then `refresh` on `401` |
+| Session | `src/lib/admin-session-context.tsx` | boots the session and keeps it synced with automatic refresh updates |
 | Session hook | `src/lib/use-admin-session.ts` | single entry point for components |
-| Low-level HTTP | `src/lib/admin-api.ts` | `credentials: include`, JSON, typed errors, CSRF injection |
+| Low-level HTTP | `src/lib/admin-api.ts` | `credentials: include`, JSON, typed errors, CSRF injection, transparent 401 refresh retry |
 | Typed client | `src/lib/admin-client.ts` | admin auth, organizations, users, catalogs, activity endpoints |
 | Types | `src/lib/types.ts` | session, users, organizations, roles, permissions, activity contracts |
 | Layout | `src/components/layout/*` | admin shell, navigation, topbar |
@@ -62,6 +62,7 @@ Main routes:
 
 - Session context is managed by `AdminSessionProvider`.
 - Server data is loaded through TanStack React Query.
+- Any admin request routed through `adminFetch` can transparently refresh once on `401` before it fails.
 - Forms stay in local `useState`.
 - This repo does not use a persistent application store.
 

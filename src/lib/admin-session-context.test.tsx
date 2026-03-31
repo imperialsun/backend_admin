@@ -5,12 +5,14 @@ import { beforeEach, describe, expect, it, vi } from "vitest"
 const adminClientMocks = vi.hoisted(() => ({
   adminLogin: vi.fn(),
   adminLogout: vi.fn(),
+  adminRefresh: vi.fn(),
   initializeAdminSession: vi.fn(),
 }))
 
 vi.mock("@/lib/admin-client", () => ({
   adminLogin: adminClientMocks.adminLogin,
   adminLogout: adminClientMocks.adminLogout,
+  adminRefresh: adminClientMocks.adminRefresh,
   initializeAdminSession: adminClientMocks.initializeAdminSession,
 }))
 
@@ -21,7 +23,7 @@ import { renderWithProviders } from "@/test/test-utils"
 const { adminLogin, adminLogout, initializeAdminSession } = adminClientMocks
 
 function SessionProbe() {
-  const { loading, session, isSuperAdmin, isOrgAdmin, login, logout } = useAdminSession()
+  const { loading, session, isSuperAdmin, isOrgAdmin, login, logout, refresh } = useAdminSession()
 
   return (
     <div>
@@ -34,6 +36,9 @@ function SessionProbe() {
       </button>
       <button onClick={() => void logout()} type="button">
         logout
+      </button>
+      <button onClick={() => void refresh().catch(() => {})} type="button">
+        refresh
       </button>
     </div>
   )
@@ -90,6 +95,24 @@ describe("AdminSessionProvider", () => {
     await waitFor(() => expect(screen.getByTestId("email")).toHaveTextContent("admin@example.com"))
 
     await user.click(screen.getByRole("button", { name: "logout" }))
+    await waitFor(() => expect(screen.getByTestId("email")).toHaveTextContent("none"))
+  })
+
+  it("clears the session when refresh fails", async () => {
+    initializeAdminSession.mockResolvedValueOnce(sessionPayload)
+    initializeAdminSession.mockRejectedValueOnce(new Error("refresh failed"))
+    const user = userEvent.setup()
+
+    renderWithProviders(
+      <AdminSessionProvider>
+        <SessionProbe />
+      </AdminSessionProvider>,
+    )
+
+    await waitFor(() => expect(screen.getByTestId("loading")).toHaveTextContent("false"))
+    expect(screen.getByTestId("email")).toHaveTextContent("admin@example.com")
+
+    await user.click(screen.getByRole("button", { name: "refresh" }))
     await waitFor(() => expect(screen.getByTestId("email")).toHaveTextContent("none"))
   })
 })

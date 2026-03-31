@@ -1,6 +1,7 @@
 import * as React from "react"
 
-import { adminLogin, adminLogout, initializeAdminSession } from "@/lib/admin-client"
+import { adminLogin, adminLogout, adminRefresh, initializeAdminSession } from "@/lib/admin-client"
+import { setAdminSessionObserver, setAdminSessionRefreshHandler } from "@/lib/admin-session-refresh"
 import { AdminSessionContext, type AdminSessionContextValue } from "@/lib/admin-session-store"
 
 export function AdminSessionProvider({ children }: { children: React.ReactNode }) {
@@ -8,12 +9,23 @@ export function AdminSessionProvider({ children }: { children: React.ReactNode }
   const [session, setSession] = React.useState<AdminSessionContextValue["session"]>(null)
 
   const refresh = React.useCallback(async () => {
-    const nextSession = await initializeAdminSession()
-    setSession(nextSession)
+    try {
+      const nextSession = await initializeAdminSession()
+      setSession(nextSession)
+    } catch (error) {
+      setSession(null)
+      throw error
+    }
   }, [])
 
-  React.useEffect(() => {
+  React.useLayoutEffect(() => {
     let active = true
+    setAdminSessionRefreshHandler(adminRefresh)
+    setAdminSessionObserver((nextSession) => {
+      if (active) {
+        setSession(nextSession)
+      }
+    })
 
     const boot = async () => {
       try {
@@ -36,6 +48,8 @@ export function AdminSessionProvider({ children }: { children: React.ReactNode }
 
     return () => {
       active = false
+      setAdminSessionObserver(null)
+      setAdminSessionRefreshHandler(null)
     }
   }, [])
 

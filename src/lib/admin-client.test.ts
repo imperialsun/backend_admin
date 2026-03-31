@@ -73,29 +73,15 @@ describe("admin-client", () => {
     expect(getAdminCsrfToken()).toBe("csrf-login")
   })
 
-  it("falls back to refresh when /me returns 401", async () => {
-    requestJson
-      .mockRejectedValueOnce(
-        new MockAdminHttpError({
-          status: 401,
-          path: "/admin/auth/me",
-          message: "unauthorized",
-          code: "http_401",
-        }),
-      )
-      .mockResolvedValueOnce({
-        ...baseSession,
-        csrfToken: "csrf-refresh",
-      })
+  it("bootstraps the admin session from /me", async () => {
+    requestJson.mockResolvedValueOnce({
+      ...baseSession,
+      csrfToken: "csrf-me",
+    })
 
     await expect(initializeAdminSession()).resolves.toMatchObject(baseSession)
-    expect(getAdminCsrfToken()).toBe("csrf-refresh")
-    expect(requestJson).toHaveBeenNthCalledWith(1, "/admin/auth/me")
-    expect(requestJson).toHaveBeenNthCalledWith(
-      2,
-      "/admin/auth/refresh",
-      expect.objectContaining({ method: "POST" }),
-    )
+    expect(getAdminCsrfToken()).toBe("csrf-me")
+    expect(requestJson).toHaveBeenCalledWith("/admin/auth/me")
   })
 
   it("returns null and clears csrf token when refresh returns 401", async () => {

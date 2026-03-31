@@ -51,6 +51,32 @@ function badgeVariantForStatus(statusCode?: number) {
   return "success" as const
 }
 
+function badgeVariantForRecoveryStatus(recoveryStatus?: string) {
+  if (!recoveryStatus) {
+    return "muted" as const
+  }
+  if (recoveryStatus.includes("succeeded")) {
+    return "success" as const
+  }
+  if (recoveryStatus.includes("failed")) {
+    return "danger" as const
+  }
+  return "muted" as const
+}
+
+function recoveryStatusLabel(recoveryStatus?: string) {
+  if (!recoveryStatus) {
+    return "n/a"
+  }
+  if (recoveryStatus === "raw_retry_succeeded") {
+    return "Récupéré après retry brut"
+  }
+  if (recoveryStatus === "raw_retry_failed") {
+    return "Retry brut échoué"
+  }
+  return recoveryStatus
+}
+
 function prettyPayload(value: string) {
   const trimmed = value.trim()
   if (!trimmed) {
@@ -202,6 +228,8 @@ export default function BackendErrorsPage() {
   })
 
   const selectedPayload = prettyPayload(selectedEvent?.payloadJson ?? "")
+  const selectedAnnex = prettyPayload(selectedEvent?.annexJson ?? "")
+  const hasAnnex = Boolean(selectedEvent?.annexJson && selectedEvent.annexJson.trim() && selectedEvent.annexJson.trim() !== "{}")
   const scopeLabel = isSuperAdmin
     ? selectedOrganizationId
       ? organizationsQuery.data?.find((organization) => organization.id === selectedOrganizationId)?.name ??
@@ -494,7 +522,16 @@ export default function BackendErrorsPage() {
                               <td className="px-6 py-4 max-w-[220px] truncate">{event.route}</td>
                               <td className="px-6 py-4 max-w-[200px] truncate">{event.step}</td>
                               <td className="px-6 py-4">
-                                <Badge variant={badgeVariantForStatus(event.statusCode)}>{event.statusCode ?? "n/a"}</Badge>
+                                <div className="flex flex-col gap-1">
+                                  <Badge variant={badgeVariantForStatus(event.statusCode)}>
+                                    {event.statusCode ?? "n/a"}
+                                  </Badge>
+                                  {event.recoveryStatus ? (
+                                    <Badge variant={badgeVariantForRecoveryStatus(event.recoveryStatus)}>
+                                      {recoveryStatusLabel(event.recoveryStatus)}
+                                    </Badge>
+                                  ) : null}
+                                </div>
                               </td>
                               <td className="px-6 py-4 max-w-[280px] truncate">
                                 {event.errorMessage || event.title}
@@ -575,13 +612,18 @@ export default function BackendErrorsPage() {
           <CardContent className="space-y-4">
             {selectedEvent ? (
               <>
-                <div className="flex flex-wrap gap-2">
-                  <Badge variant={badgeVariantForStatus(selectedEvent.statusCode)}>
-                    {selectedEvent.statusCode ?? "n/a"}
-                  </Badge>
-                  <Badge variant="muted">{selectedEvent.component}</Badge>
-                  <Badge variant="muted">{selectedEvent.route}</Badge>
-                </div>
+                  <div className="flex flex-wrap gap-2">
+                    <Badge variant={badgeVariantForStatus(selectedEvent.statusCode)}>
+                      {selectedEvent.statusCode ?? "n/a"}
+                    </Badge>
+                    <Badge variant="muted">{selectedEvent.component}</Badge>
+                    <Badge variant="muted">{selectedEvent.route}</Badge>
+                    {selectedEvent.recoveryStatus ? (
+                      <Badge variant={badgeVariantForRecoveryStatus(selectedEvent.recoveryStatus)}>
+                        {recoveryStatusLabel(selectedEvent.recoveryStatus)}
+                      </Badge>
+                    ) : null}
+                  </div>
                 <div className="space-y-3 text-sm">
                   <div>
                     <p className="text-xs uppercase tracking-[0.18em] text-muted-foreground">Trace</p>
@@ -618,12 +660,26 @@ export default function BackendErrorsPage() {
                     <p>{selectedEvent.errorMessage || "n/a"}</p>
                   </div>
                 </div>
+                {selectedEvent.recoveryStatus ? (
+                  <div className="space-y-2 rounded-3xl border border-emerald-500/20 bg-emerald-500/5 p-4 text-sm">
+                    <p className="text-xs uppercase tracking-[0.18em] text-muted-foreground">Récupération</p>
+                    <p>{recoveryStatusLabel(selectedEvent.recoveryStatus)}</p>
+                  </div>
+                ) : null}
                 <div className="space-y-2">
                   <p className="text-xs uppercase tracking-[0.18em] text-muted-foreground">Payload</p>
                   <pre className="max-h-[32rem] overflow-auto rounded-3xl border border-border/70 bg-muted/40 p-4 text-xs leading-relaxed">
                     {selectedPayload}
                   </pre>
                 </div>
+                {hasAnnex ? (
+                  <div className="space-y-2">
+                    <p className="text-xs uppercase tracking-[0.18em] text-muted-foreground">Annexe frontend</p>
+                    <pre className="max-h-[28rem] overflow-auto rounded-3xl border border-border/70 bg-muted/40 p-4 text-xs leading-relaxed">
+                      {selectedAnnex}
+                    </pre>
+                  </div>
+                ) : null}
               </>
             ) : (
               <div className="rounded-3xl border border-border/70 bg-muted/40 p-4 text-sm text-muted-foreground">

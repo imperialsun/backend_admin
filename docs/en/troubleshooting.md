@@ -15,17 +15,19 @@ Actions:
 3. inspect cookies and `Set-Cookie` responses in the network panel,
 4. verify that admin credentials are valid on the backend side.
 
-## `401` on `me` and refresh also fails
+## `401` on `me` or another protected route keeps bouncing to login
 
 Symptom:
 
-- the app loads but stays anonymous.
+- the app loads but stays anonymous,
+- a protected route keeps failing even though the frontend retries refresh once.
 
 Actions:
 
 1. inspect `/admin/auth/refresh`,
 2. verify that the refresh cookie still exists,
-3. verify cookie domain, secure flag, and backend path configuration.
+3. verify cookie domain, secure flag, and backend path configuration,
+4. confirm that the backend still accepts the session cookies after the retry.
 
 ## Empty organization list
 

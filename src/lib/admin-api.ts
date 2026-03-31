@@ -1,4 +1,5 @@
 import { getAdminCsrfToken } from "@/lib/admin-security"
+import { requestAdminSessionRefresh } from "@/lib/admin-session-refresh"
 import { getRuntimeConfig } from "@/lib/runtime-config"
 
 const DEFAULT_SAFE_TIMEOUT_MS = 15_000
@@ -8,12 +9,20 @@ const DEFAULT_RETRY_INITIAL_BACKOFF_MS = 300
 const DEFAULT_RETRY_MAX_BACKOFF_MS = 2_000
 const RETRYABLE_METHODS = new Set(["GET", "HEAD", "OPTIONS"])
 const RETRYABLE_HTTP_STATUSES = new Set([404, 408, 502, 503, 504])
+const SESSION_REFRESH_EXEMPT_PATHS = new Set([
+  "/admin/auth/login",
+  "/admin/auth/refresh",
+  "/admin/auth/logout",
+  "/admin/auth/forgot-password",
+  "/admin/auth/reset-password",
+])
 
 export type AdminFetchOptions = RequestInit & {
   timeoutMs?: number
   retryAttempts?: number
   retryInitialBackoffMs?: number
   retryMaxBackoffMs?: number
+  allowSessionRefresh?: boolean
 }
 
 export class AdminHttpError extends Error {
@@ -56,6 +65,14 @@ function isMutating(method: string) {
   return !["GET", "HEAD", "OPTIONS"].includes(method)
 }
 
+function canAttemptSessionRefresh(path: string, init?: AdminFetchOptions) {
+  if (init?.allowSessionRefresh === false) {
+    return false
+  }
+
+  return !SESSION_REFRESH_EXEMPT_PATHS.has(path)
+}
+
 function isRetryableMethod(method: string) {
   return RETRYABLE_METHODS.has(method)
 }
@@ -81,6 +98,24 @@ function getDefaultTimeoutMs(method: string) {
 
 function calculateRetryDelayMs(attempt: number, initialBackoffMs: number, maxBackoffMs: number) {
   return Math.min(initialBackoffMs * 2 ** attempt, maxBackoffMs)
+}
+
+function buildHeaders(init: AdminFetchOptions | undefined, method: string) {
+  const headers = new Headers(init?.headers ?? {})
+  headers.set("Accept", "application/json")
+
+  if (isMutating(method) && !headers.has("Content-Type") && init?.body) {
+    headers.set("Content-Type", "application/json")
+  }
+
+  if (isMutating(method) && !headers.has("X-Admin-CSRF")) {
+    const csrfToken = getAdminCsrfToken()
+    if (csrfToken) {
+      headers.set("X-Admin-CSRF", csrfToken)
+    }
+  }
+
+  return headers
 }
 
 async function performFetchWithTimeout(
@@ -196,22 +231,14 @@ export async function adminFetch(path: string, init?: AdminFetchOptions) {
   const retryInitialBackoffMs = init?.retryInitialBackoffMs ?? DEFAULT_RETRY_INITIAL_BACKOFF_MS
   const retryMaxBackoffMs = init?.retryMaxBackoffMs ?? DEFAULT_RETRY_MAX_BACKOFF_MS
   const timeoutMs = init?.timeoutMs ?? getDefaultTimeoutMs(method)
-  const headers = new Headers(init?.headers ?? {})
-  headers.set("Accept", "application/json")
-  if (isMutating(method) && !headers.has("Content-Type") && init?.body) {
-    headers.set("Content-Type", "application/json")
-  }
-  if (isMutating(method) && !headers.has("X-Admin-CSRF")) {
-    const csrfToken = getAdminCsrfToken()
-    if (csrfToken) {
-      headers.set("X-Admin-CSRF", csrfToken)
-    }
-  }
+  const allowSessionRefresh = canAttemptSessionRefresh(path, init)
 
   let attempt = 0
+  let sessionRefreshAttempted = false
   while (true) {
     let response: Response
     try {
+      const headers = buildHeaders(init, method)
       response = await performFetchWithTimeout(
         toBackendUrl(path),
         {
@@ -237,6 +264,19 @@ export async function adminFetch(path: string, init?: AdminFetchOptions) {
       throw toAdminTransportError(path, error)
     }
 
+    if (response.status === 401 && allowSessionRefresh && !sessionRefreshAttempted) {
+      sessionRefreshAttempted = true
+
+      try {
+        const refreshedSession = await requestAdminSessionRefresh()
+        if (refreshedSession) {
+          continue
+        }
+      } catch {
+        // The refresh handler already normalizes session state.
+      }
+    }
+
     if (!response.ok && attempt < retryAttempts && isRetryableHttpStatus(response.status)) {
       const delayMs = calculateRetryDelayMs(attempt, retryInitialBackoffMs, retryMaxBackoffMs)
       attempt += 1
@@ -252,11 +292,11 @@ export async function adminFetch(path: string, init?: AdminFetchOptions) {
   }
 }
 
-export async function requestJson<T>(path: string, init?: RequestInit) {
+export async function requestJson<T>(path: string, init?: AdminFetchOptions) {
   const response = await adminFetch(path, init)
   return parseJson<T>(response)
 }
 
-export async function requestNoContent(path: string, init?: RequestInit) {
+export async function requestNoContent(path: string, init?: AdminFetchOptions) {
   await adminFetch(path, init)
 }

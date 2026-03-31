@@ -88,7 +88,7 @@ Runtime sources:
 ## Security model
 
 - All admin traffic targets the dedicated admin namespace under `/api/v1/admin/*`.
-- Admin session bootstrap uses `/admin/auth/me` first, then `/admin/auth/refresh` on `401`.
+- Admin session bootstrap uses `/admin/auth/me` first; the shared admin HTTP layer transparently refreshes once on `401` for protected routes and retries the request.
 - Requests are sent with `credentials: include`.
 - The admin CSRF token is stored in memory only and injected as `X-Admin-CSRF` on mutating requests.
 - No auth token, password, or CSRF token is persisted in `localStorage`, `sessionStorage`, or IndexedDB.

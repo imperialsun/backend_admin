@@ -15,17 +15,19 @@ Actions:
 3. verifier cookies et reponses `Set-Cookie` dans l onglet network,
 4. verifier que les identifiants admin sont valides cote backend.
 
-## `401` sur `me` puis refresh echoue
+## `401` sur `me` ou une autre route protegee renvoie toujours vers `/login`
 
 Symptome:
 
-- l app charge puis reste anonyme.
+- l app charge puis reste anonyme,
+- une route protegee continue d echouer alors que le front retente deja un refresh une fois.
 
 Actions:
 
 1. verifier `/admin/auth/refresh`,
 2. verifier que le refresh cookie existe encore,
-3. verifier domaine, secure flag et path des cookies backend.
+3. verifier domaine, secure flag et path des cookies backend,
+4. confirmer que le backend accepte encore la session apres la tentative de refresh.
 
 ## Liste d organisations vide
 

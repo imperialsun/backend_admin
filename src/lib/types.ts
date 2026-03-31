@@ -150,6 +150,8 @@ export interface BackendErrorEvent {
   durationMs?: number
   errorMessage?: string
   payloadJson: string
+  annexJson?: string
+  recoveryStatus?: string
   createdAt: string
 }
 

@@ -13,6 +13,8 @@ Endpoints utilises:
 - `/admin/auth/refresh`
 - `/admin/auth/logout`
 
+La couche HTTP admin partagee tente un refresh transparent une seule fois sur les requetes protegees qui reçoivent `401`, puis rejoue la requete avec le nouveau token CSRF.
+
 ## Diagramme: cycle de session
 
 ```mermaid
@@ -72,6 +74,14 @@ Comportements:
 - chargement initial: ecran "Chargement du contexte administrateur",
 - session absente: redirect vers `/login`,
 - session valide mais scope insuffisant: redirect vers `/forbidden`.
+
+## Recuperation sur route protegee
+
+Si une route admin protegee recoit `401` en usage normal:
+
+- `src/lib/admin-api.ts` tente un seul refresh automatique,
+- la requete originale est rejouee une fois avec le nouveau token CSRF,
+- si le refresh echoue encore, la session est videe et `RequireAuth` renvoie vers `/login`.
 
 ## Logout
 
