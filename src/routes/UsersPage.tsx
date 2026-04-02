@@ -985,7 +985,6 @@ export default function UsersPage() {
       setDeleteConfirmUserId(null)
       const currentUsers = queryClient.getQueryData<User[]>(usersQueryKey) ?? []
       const remainingUsers = currentUsers.filter((user) => user.id !== deletedUser.id)
-      const nextVisibleUser = filterUsersBySearch(remainingUsers, searchFilter)[0]
 
       queryClient.setQueryData(usersQueryKey, remainingUsers)
       queryClient.removeQueries({ queryKey: ["user-access", deletedUser.id] })
@@ -994,7 +993,6 @@ export default function UsersPage() {
       setUsersSearchParams({
         org: organizationFilter,
         q: searchFilter,
-        user: nextVisibleUser?.id,
       })
       setFeedback("Utilisateur supprimé.")
 

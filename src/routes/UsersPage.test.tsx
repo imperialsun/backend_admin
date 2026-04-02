@@ -346,7 +346,7 @@ describe("UsersPage", () => {
     expect(screen.getByText("bad@example.com")).toBeInTheDocument()
   })
 
-  it("deletes a user from the table and selects the next visible user", async () => {
+  it("deletes a user from the table without reopening another detail", async () => {
     const user = userEvent.setup()
     fetchUsersByOrganization.mockResolvedValueOnce([users[0], secondaryUser]).mockResolvedValueOnce([secondaryUser])
 
@@ -369,9 +369,11 @@ describe("UsersPage", () => {
 
     await waitFor(() => expect(deleteUser).toHaveBeenCalledWith("user-1"))
     await screen.findByText("Utilisateur supprimé.")
+    await waitFor(() => expect(fetchUsersByOrganization).toHaveBeenCalledTimes(2))
     expect(screen.queryByText("medecin@example.com")).not.toBeInTheDocument()
-    await screen.findByText(/Compte ciblé: user-2\./)
-    await screen.findByRole("dialog", { name: "assistant@example.com" })
+    expect(fetchUserAccess).not.toHaveBeenCalledWith("user-2")
+    await waitFor(() => expect(screen.queryByRole("dialog")).not.toBeInTheDocument())
+    expect(screen.queryByText(/Compte ciblé: user-2\./)).not.toBeInTheDocument()
   })
 
   it("surfaces backend delete errors from the table action", async () => {
@@ -463,11 +465,18 @@ describe("UsersPage", () => {
     const user = userEvent.setup()
     fetchUsersByOrganization.mockResolvedValueOnce(users).mockResolvedValueOnce([])
 
-    renderWithProviders(<UsersPage />, {
-      route: "/users?org=org-1",
-    })
+    renderWithProviders(
+      <>
+        <LocationProbe />
+        <UsersPage />
+      </>,
+      {
+        route: "/users?org=org-1",
+      },
+    )
 
     await openUserDetail(user, "medecin@example.com")
+    await waitFor(() => expect(screen.getByTestId("location-search")).toHaveTextContent("user=user-1"))
     await user.click(screen.getByRole("button", { name: "Supprimer l’utilisateur" }))
 
     expect(screen.getByText(/Cette action est irréversible/)).toBeInTheDocument()
@@ -476,6 +485,7 @@ describe("UsersPage", () => {
 
     await waitFor(() => expect(deleteUser).toHaveBeenCalledWith("user-1"))
     await screen.findByText("Utilisateur supprimé.")
+    await waitFor(() => expect(screen.getByTestId("location-search")).toHaveTextContent("?org=org-1"))
     await waitFor(() => expect(screen.queryByRole("dialog")).not.toBeInTheDocument())
     expect(screen.getByText("Aucun utilisateur trouvé pour ce filtre.")).toBeInTheDocument()
   })
