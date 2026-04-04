@@ -195,4 +195,92 @@ describe("PerformancePage", () => {
     expect(await screen.findByText("Fenêtre de performance")).toBeInTheDocument()
     expect(screen.queryByRole("button", { name: /purger les données/i })).not.toBeInTheDocument()
   })
+
+  it("keeps long routes on their own line in the slow tasks card", async () => {
+    const longRoute = "/api/v1/transcriptions/demeter/sessions/very-long-route-name-with-many-segments/and-a-final-tail"
+
+    fetchPerformanceSummary.mockResolvedValueOnce({
+      organizationId: "org-1",
+      range: {
+        from: "2026-03-01",
+        to: "2026-03-31",
+      },
+      totals: {
+        events: 3,
+        successes: 2,
+        failures: 1,
+        totalDurationMs: 6_900,
+        averageDurationMs: 2_300,
+        maxDurationMs: 4_200,
+      },
+      taskOptions: ["cloud_total", "request", "response_received"],
+      byDay: [
+        {
+          day: "2026-03-30",
+          events: 2,
+          successes: 2,
+          failures: 0,
+          totalDurationMs: 5_200,
+          averageDurationMs: 2_600,
+          maxDurationMs: 4_200,
+        },
+      ],
+      topTasks: [
+        {
+          surface: "frontend",
+          component: "cloud",
+          task: "cloud_total",
+          route: longRoute,
+          events: 2,
+          successes: 2,
+          failures: 0,
+          totalDurationMs: 5_200,
+          averageDurationMs: 2_600,
+          maxDurationMs: 4_200,
+          lastOccurredAt: "2026-03-30T16:45:23Z",
+        },
+      ],
+      recentEvents: [
+        {
+          eventId: "perf-1",
+          traceId: "trace-1",
+          organizationId: "org-1",
+          surface: "frontend",
+          component: "cloud",
+          task: "cloud_total",
+          status: "success",
+          durationMs: 4_200,
+          route: "/cloudupload",
+          metaJson: JSON.stringify({ provider: "whisper" }),
+          occurredAt: "2026-03-30T16:45:23Z",
+          day: "2026-03-30",
+          createdAt: "2026-03-30T16:45:23Z",
+        },
+      ],
+    })
+
+    renderWithProviders(<PerformancePage />, {
+      route: "/performance?from=2026-03-01&to=2026-03-31&organizationId=org-1",
+    })
+
+    expect(await screen.findByText(longRoute)).toBeInTheDocument()
+    const routeNode = screen.getByText(longRoute)
+    expect(routeNode).toHaveClass("break-words")
+    expect(routeNode).toHaveClass("[overflow-wrap:anywhere]")
+
+    const routeBlock = routeNode.parentElement
+    if (!routeBlock) {
+      throw new Error("Expected the long route to be wrapped in its own block")
+    }
+    expect(routeBlock).toHaveClass("min-w-0")
+
+    const statsGrid = routeBlock?.nextElementSibling
+    if (!(statsGrid instanceof HTMLElement)) {
+      throw new Error("Expected the metrics grid immediately after the route block")
+    }
+    expect(statsGrid).toHaveClass("grid")
+    expect(within(statsGrid).getByText("Moyenne")).toBeInTheDocument()
+    expect(within(statsGrid).getByText("Pic")).toBeInTheDocument()
+    expect(within(statsGrid).getByText("Exécutions")).toBeInTheDocument()
+  })
 })

@@ -648,26 +648,31 @@ export default function PerformancePage() {
             <div className="space-y-3">
               {summary?.topTasks.length ? (
                 summary.topTasks.map((item) => (
-                  <div className="rounded-2xl border border-border/70 bg-muted/35 p-4" key={`${item.surface}-${item.component}-${item.task}-${item.route}`}>
+                  <div
+                    className="min-w-0 rounded-2xl border border-border/70 bg-muted/35 p-4"
+                    key={`${item.surface}-${item.component}-${item.task}-${item.route}`}
+                  >
                     <div className="mb-3 flex flex-wrap items-center gap-2">
                       <Badge variant={surfaceVariant(item.surface)}>{toTitleCase(item.surface)}</Badge>
                       <Badge variant="muted">{toTitleCase(item.component)}</Badge>
                       <Badge variant="default">{toTitleCase(item.task)}</Badge>
                     </div>
-                    <div className="grid gap-3 text-sm sm:grid-cols-2">
-                      <div>
-                        <p className="text-xs uppercase tracking-[0.18em] text-muted-foreground">Route</p>
-                        <p className="mt-1 font-medium">{item.route}</p>
-                      </div>
-                      <div>
+                    <div className="min-w-0">
+                      <p className="text-xs uppercase tracking-[0.18em] text-muted-foreground">Route</p>
+                      <p className="mt-1 min-w-0 break-words font-mono text-sm font-medium [overflow-wrap:anywhere]">
+                        {item.route}
+                      </p>
+                    </div>
+                    <div className="mt-4 grid min-w-0 gap-3 text-sm sm:grid-cols-3">
+                      <div className="min-w-0 rounded-xl border border-border/50 bg-background/50 p-3">
                         <p className="text-xs uppercase tracking-[0.18em] text-muted-foreground">Moyenne</p>
                         <p className="mt-1 font-medium">{formatDurationMs(item.averageDurationMs)}</p>
                       </div>
-                      <div>
+                      <div className="min-w-0 rounded-xl border border-border/50 bg-background/50 p-3">
                         <p className="text-xs uppercase tracking-[0.18em] text-muted-foreground">Pic</p>
                         <p className="mt-1 font-medium">{formatDurationMs(item.maxDurationMs)}</p>
                       </div>
-                      <div>
+                      <div className="min-w-0 rounded-xl border border-border/50 bg-background/50 p-3">
                         <p className="text-xs uppercase tracking-[0.18em] text-muted-foreground">Exécutions</p>
                         <p className="mt-1 font-medium">{item.events}</p>
                       </div>
