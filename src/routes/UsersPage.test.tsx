@@ -195,7 +195,7 @@ function buildActivitySummary(user: { id: string; organizationId: string; email:
 function LocationProbe() {
   const location = useLocation()
 
-  return <div data-testid="location-search">{location.search}</div>
+  return <div data-testid="location-search">{`${location.pathname}${location.search}`}</div>
 }
 
 async function openUserDetail(user: ReturnType<typeof userEvent.setup>, email: string) {
@@ -525,6 +525,30 @@ describe("UsersPage", () => {
 
     await waitFor(() => expect(deleteUserActivity).toHaveBeenCalledWith("user-1"))
     await screen.findByText("Activité utilisateur supprimée.")
+  })
+
+  it("navigates to the settings page from the user list", async () => {
+    const user = userEvent.setup()
+
+    renderWithProviders(
+      <>
+        <LocationProbe />
+        <UsersPage />
+      </>,
+      {
+        route: "/users?org=org-1",
+      },
+    )
+
+    const row = await screen.findByText("medecin@example.com")
+    const rowElement = row.closest("tr")
+    expect(rowElement).not.toBeNull()
+
+    await user.click(within(rowElement as HTMLTableRowElement).getByRole("button", { name: "Réglages" }))
+
+    await waitFor(() =>
+      expect(screen.getByTestId("location-search")).toHaveTextContent("/users/user-1/settings?org=org-1"),
+    )
   })
 
   it("opens the user modal from Gérer and preserves org and search filters when closing", async () => {

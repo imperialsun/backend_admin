@@ -17,6 +17,7 @@ import type {
   User,
   UserActivitySummary,
   UserAccessResponse,
+  UserSettingsEnvelope,
 } from "@/lib/types"
 
 type LoginRequest = {
@@ -218,6 +219,26 @@ export async function updateUserEntitlements(userId: string, overrides: Permissi
 
 export async function fetchUserAccess(userId: string) {
   return requestJson<UserAccessResponse>(`/admin/users/${userId}/access`)
+}
+
+export async function fetchUserSettings(userId: string) {
+  return requestJson<UserSettingsEnvelope>(`/admin/users/${userId}/settings`)
+}
+
+export async function updateUserSettings(
+  userId: string,
+  input: { schemaVersion: number; settings: Record<string, unknown> },
+) {
+  return requestJson<UserSettingsEnvelope>(`/admin/users/${userId}/settings`, {
+    method: "PUT",
+    body: JSON.stringify(input),
+  })
+}
+
+export async function resetUserSettings(userId: string) {
+  return requestJson<UserSettingsEnvelope>(`/admin/users/${userId}/settings/reset`, {
+    method: "POST",
+  })
 }
 
 export async function fetchRolesCatalog() {

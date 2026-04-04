@@ -1,7 +1,7 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query"
 import { useEffect, useMemo, useState, type ReactNode } from "react"
 import { createPortal } from "react-dom"
-import { useSearchParams } from "react-router-dom"
+import { useNavigate, useSearchParams } from "react-router-dom"
 import { X } from "lucide-react"
 
 import { ActivitySummarySection } from "@/components/activity/ActivitySummarySection"
@@ -830,6 +830,7 @@ function UserDetailPanel(props: {
 
 export default function UsersPage() {
   const queryClient = useQueryClient()
+  const navigate = useNavigate()
   const [searchParams, setSearchParams] = useSearchParams()
   const { isSuperAdmin, session } = useAdminSession()
   const [createForm, setCreateForm] = useState<UserForm>(defaultUserForm)
@@ -1391,6 +1392,23 @@ export default function UsersPage() {
                               variant={selected ? "primary" : "secondary"}
                             >
                               {selected ? "Sélectionné" : "Gérer"}
+                            </Button>
+                            <Button
+                              onClick={() => {
+                                setDeleteConfirmUserId(null)
+                                const params = new URLSearchParams()
+                                if (isSuperAdmin && organizationFilter) {
+                                  params.set("org", organizationFilter)
+                                }
+                                if (searchFilter) {
+                                  params.set("q", searchFilter)
+                                }
+                                navigate(`/users/${user.id}/settings${params.toString() ? `?${params.toString()}` : ""}`)
+                              }}
+                              size="sm"
+                              variant="secondary"
+                            >
+                              Réglages
                             </Button>
                             <Button
                               disabled={deleteMutation.isPending}

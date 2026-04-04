@@ -85,6 +85,13 @@ export interface UserAccessResponse {
   effectivePermissions: string[]
 }
 
+export interface UserSettingsEnvelope {
+  version: number
+  schemaVersion: number
+  updatedAt: string
+  settings: Record<string, unknown>
+}
+
 export interface ActivitySummary {
   organizationId: string
   range: {

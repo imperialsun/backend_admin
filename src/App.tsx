@@ -11,6 +11,7 @@ import LoginPage from "@/routes/LoginPage"
 import OrganizationsPage from "@/routes/OrganizationsPage"
 import PerformancePage from "@/routes/PerformancePage"
 import ResetPasswordPage from "@/routes/ResetPasswordPage"
+import UserSettingsPage from "@/routes/UserSettingsPage"
 import UsersPage from "@/routes/UsersPage"
 
 function LoadingScreen() {
@@ -75,6 +76,7 @@ export default function App() {
           }
         />
         <Route path="/users" element={<UsersPage />} />
+        <Route path="/users/:id/settings" element={<UserSettingsPage />} />
         <Route path="/activity" element={<ActivityPage />} />
         <Route
           path="/performance"
