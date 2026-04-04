@@ -52,6 +52,7 @@ type BackendErrorEventsInput = {
   route?: string
   q?: string
   organizationId?: string
+  userId?: string
   page?: number
   pageSize?: number
 }
@@ -315,6 +316,9 @@ function buildBackendErrorEventParams(input: BackendErrorEventsInput) {
   }
   if (input.organizationId?.trim()) {
     params.set("organizationId", input.organizationId.trim())
+  }
+  if (input.userId?.trim()) {
+    params.set("userId", input.userId.trim())
   }
   if (typeof input.page === "number" && input.page > 0) {
     params.set("page", String(input.page))
