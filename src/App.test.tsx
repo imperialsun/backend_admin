@@ -19,6 +19,7 @@ vi.mock("@/routes/DashboardPage", () => ({ default: () => <div>dashboard-page</d
 vi.mock("@/routes/OrganizationsPage", () => ({ default: () => <div>organizations-page</div> }))
 vi.mock("@/routes/UsersPage", () => ({ default: () => <div>users-page</div> }))
 vi.mock("@/routes/ActivityPage", () => ({ default: () => <div>activity-page</div> }))
+vi.mock("@/routes/PerformancePage", () => ({ default: () => <div>performance-page</div> }))
 vi.mock("@/routes/BackendErrorsPage", () => ({ default: () => <div>backend-errors-page</div> }))
 vi.mock("@/routes/ForbiddenPage", () => ({ default: () => <div>forbidden-page</div> }))
 
@@ -106,6 +107,30 @@ describe("App routes", () => {
     )
 
     expect(screen.getByText("backend-errors-page")).toBeInTheDocument()
+  })
+
+  it("renders the performance dashboard for super admins", () => {
+    useAdminSession.mockReturnValue(sessionMock())
+
+    render(
+      <MemoryRouter initialEntries={["/performance"]}>
+        <App />
+      </MemoryRouter>,
+    )
+
+    expect(screen.getByText("performance-page")).toBeInTheDocument()
+  })
+
+  it("redirects non super admin users away from performance", () => {
+    useAdminSession.mockReturnValue(sessionMock({ isSuperAdmin: false, globalRoles: ["user"] }))
+
+    render(
+      <MemoryRouter initialEntries={["/performance"]}>
+        <App />
+      </MemoryRouter>,
+    )
+
+    expect(screen.getByText("forbidden-page")).toBeInTheDocument()
   })
 
   it("redirects non super admin users away from backend errors", () => {

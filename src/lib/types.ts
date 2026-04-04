@@ -161,3 +161,60 @@ export interface BackendErrorEventsResponse {
   page: number
   pageSize: number
 }
+
+export interface PerformanceEvent {
+  eventId: string
+  traceId: string
+  userId?: string
+  organizationId?: string
+  surface: string
+  component: string
+  task: string
+  status: string
+  durationMs: number
+  route: string
+  metaJson: string
+  occurredAt: string
+  day: string
+  createdAt: string
+}
+
+export interface PerformanceSummary {
+  organizationId: string
+  range: {
+    from: string
+    to: string
+  }
+  totals: {
+    events: number
+    successes: number
+    failures: number
+    totalDurationMs: number
+    averageDurationMs: number
+    maxDurationMs: number
+  }
+  taskOptions: string[]
+  byDay: Array<{
+    day: string
+    events: number
+    successes: number
+    failures: number
+    totalDurationMs: number
+    averageDurationMs: number
+    maxDurationMs: number
+  }>
+  topTasks: Array<{
+    surface: string
+    component: string
+    task: string
+    route: string
+    events: number
+    successes: number
+    failures: number
+    totalDurationMs: number
+    averageDurationMs: number
+    maxDurationMs: number
+    lastOccurredAt: string
+  }>
+  recentEvents: PerformanceEvent[]
+}

@@ -49,6 +49,7 @@ describe("Sidebar", () => {
 
     expect(screen.getByAltText("Logo Demeter Santé")).toHaveAttribute("src", "/logo.png")
     expect(screen.getByText("Admin Panel")).toBeInTheDocument()
+    expect(screen.getByRole("link", { name: "Performance" })).toHaveAttribute("href", "/performance")
     expect(screen.getByRole("link", { name: "Erreurs backend" })).toHaveAttribute("href", "/backend-errors")
   })
 
@@ -59,6 +60,7 @@ describe("Sidebar", () => {
       route: "/dashboard",
     })
 
+    expect(screen.queryByRole("link", { name: "Performance" })).not.toBeInTheDocument()
     expect(screen.queryByRole("link", { name: "Erreurs backend" })).not.toBeInTheDocument()
   })
 })

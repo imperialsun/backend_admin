@@ -40,7 +40,9 @@ import {
   initializeAdminSession,
   fetchBackendErrorEvents,
   createUsersBulk,
+  fetchPerformanceSummary,
   fetchUserActivitySummary,
+  purgePerformanceEvents,
   purgeBackendErrorEvents,
   sendUserPasswordResetEmail,
 } from "@/lib/admin-client"
@@ -253,6 +255,44 @@ describe("admin-client", () => {
     )
   })
 
+  it("fetches performance summaries through the admin namespace", async () => {
+    requestJson.mockResolvedValue({
+      organizationId: "org-1",
+      range: {
+        from: "2026-03-01",
+        to: "2026-03-31",
+      },
+      totals: {
+        events: 1,
+        successes: 1,
+        failures: 0,
+        totalDurationMs: 42,
+        averageDurationMs: 42,
+        maxDurationMs: 42,
+      },
+      taskOptions: ["request"],
+      byDay: [],
+      topTasks: [],
+      recentEvents: [],
+    })
+
+    await expect(
+      fetchPerformanceSummary({
+        from: "2026-03-01",
+        to: "2026-03-31",
+        organizationId: "org-1",
+        task: "request",
+      }),
+    ).resolves.toMatchObject({
+      organizationId: "org-1",
+      totals: { events: 1 },
+    })
+
+    expect(requestJson).toHaveBeenCalledWith(
+      "/admin/performance/summary?from=2026-03-01&to=2026-03-31&organizationId=org-1&task=request",
+    )
+  })
+
   it("purges backend errors through the admin namespace", async () => {
     requestNoContent.mockResolvedValue(undefined)
 
@@ -269,6 +309,24 @@ describe("admin-client", () => {
 
     expect(requestNoContent).toHaveBeenCalledWith(
       "/admin/backend-errors?from=2026-03-01&to=2026-03-31&component=admin&route=%2Fadmin%2Fbackend-errors&q=boom&organizationId=org-1",
+      expect.objectContaining({ method: "DELETE" }),
+    )
+  })
+
+  it("purges performance events through the admin namespace", async () => {
+    requestNoContent.mockResolvedValue(undefined)
+
+    await expect(
+      purgePerformanceEvents({
+        from: "2026-03-01",
+        to: "2026-03-31",
+        organizationId: "org-1",
+        task: "request",
+      }),
+    ).resolves.toBeUndefined()
+
+    expect(requestNoContent).toHaveBeenCalledWith(
+      "/admin/performance?from=2026-03-01&to=2026-03-31&organizationId=org-1&task=request",
       expect.objectContaining({ method: "DELETE" }),
     )
   })

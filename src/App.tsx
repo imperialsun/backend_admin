@@ -9,6 +9,7 @@ import ForbiddenPage from "@/routes/ForbiddenPage"
 import ForgotPasswordPage from "@/routes/ForgotPasswordPage"
 import LoginPage from "@/routes/LoginPage"
 import OrganizationsPage from "@/routes/OrganizationsPage"
+import PerformancePage from "@/routes/PerformancePage"
 import ResetPasswordPage from "@/routes/ResetPasswordPage"
 import UsersPage from "@/routes/UsersPage"
 
@@ -75,6 +76,14 @@ export default function App() {
         />
         <Route path="/users" element={<UsersPage />} />
         <Route path="/activity" element={<ActivityPage />} />
+        <Route
+          path="/performance"
+          element={
+            <RequireSuperAdmin>
+              <PerformancePage />
+            </RequireSuperAdmin>
+          }
+        />
         <Route
           path="/backend-errors"
           element={

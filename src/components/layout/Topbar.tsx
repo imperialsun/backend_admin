@@ -9,6 +9,7 @@ const titles: Record<string, { title: string; subtitle: string }> = {
   "/organizations": { title: "Organisations", subtitle: "Création, activation et édition des tenants." },
   "/users": { title: "Utilisateurs & droits", subtitle: "Gestion des comptes, des rôles et des overrides de permissions." },
   "/activity": { title: "Activité", subtitle: "Analyse de l’usage par période, utilisateur et provider." },
+  "/performance": { title: "Performance", subtitle: "Timings backend et frontend, visibles uniquement par les super admin." },
   "/backend-errors": { title: "Console d’erreurs", subtitle: "Historique persistant des erreurs backend, avec filtre et purge." },
 }
 

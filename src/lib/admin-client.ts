@@ -12,6 +12,7 @@ import type {
   Organization,
   PermissionCatalogItem,
   PermissionOverride,
+  PerformanceSummary,
   RolesCatalog,
   User,
   UserActivitySummary,
@@ -52,6 +53,13 @@ type BackendErrorEventsInput = {
   organizationId?: string
   page?: number
   pageSize?: number
+}
+
+type PerformanceSummaryInput = {
+  from: string
+  to: string
+  organizationId?: string
+  task?: string
 }
 
 function rememberSession(payload: AdminSessionPayload) {
@@ -229,6 +237,42 @@ export async function fetchActivitySummary(input: { from: string; to: string; or
     params.set("organizationId", input.organizationId)
   }
   return requestJson<ActivitySummary>(`/admin/activity/summary?${params.toString()}`)
+}
+
+export async function fetchPerformanceSummary(input: { from: string; to: string; organizationId?: string; task?: string }) {
+  const params = new URLSearchParams({
+    from: input.from,
+    to: input.to,
+  })
+  if (input.organizationId) {
+    params.set("organizationId", input.organizationId)
+  }
+  if (input.task) {
+    params.set("task", input.task)
+  }
+  return requestJson<PerformanceSummary>(`/admin/performance/summary?${params.toString()}`)
+}
+
+function buildPerformanceSummaryParams(input: PerformanceSummaryInput) {
+  const params = new URLSearchParams({
+    from: input.from,
+    to: input.to,
+  })
+  if (input.organizationId?.trim()) {
+    params.set("organizationId", input.organizationId.trim())
+  }
+  if (input.task?.trim()) {
+    params.set("task", input.task.trim())
+  }
+  return params
+}
+
+export async function purgePerformanceEvents(input: PerformanceSummaryInput) {
+  const params = buildPerformanceSummaryParams(input)
+  const suffix = params.toString()
+  return requestNoContent(`/admin/performance${suffix ? `?${suffix}` : ""}`, {
+    method: "DELETE",
+  })
 }
 
 function buildBackendErrorEventParams(input: BackendErrorEventsInput) {
