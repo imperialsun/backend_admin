@@ -58,6 +58,47 @@ function setSearchParam(params: URLSearchParams, key: string, value: string | un
   params.delete(key)
 }
 
+const performanceTaskStepLabels: Record<string, string> = {
+  request_start: "Début de requête",
+  request_error: "Erreur de requête",
+  response_received: "Réponse reçue",
+  upstream_error_response: "Réponse en erreur",
+  transport_error: "Erreur réseau",
+  read_error: "Erreur de lecture",
+}
+
+function formatPerformanceTaskStep(step: string) {
+  return performanceTaskStepLabels[step] ?? toTitleCase(step)
+}
+
+function formatPerformanceTaskDisplay(task: string) {
+  const normalized = task.trim()
+  if (!normalized) {
+    return { label: "Inconnue", detail: "" }
+  }
+
+  const familyPrefixes = [
+    { prefix: "transcription_", label: "Transcription" },
+    { prefix: "cr_generation_", label: "Génération de CR" },
+    { prefix: "mistral_", label: "Mistral" },
+  ] as const
+
+  for (const family of familyPrefixes) {
+    if (normalized.startsWith(family.prefix)) {
+      return {
+        label: family.label,
+        detail: formatPerformanceTaskStep(normalized.slice(family.prefix.length)),
+      }
+    }
+  }
+
+  if (normalized === "audio_transcription") {
+    return { label: "Transcription Demeter", detail: "Historique" }
+  }
+
+  return { label: toTitleCase(normalized), detail: "" }
+}
+
 const performanceTaskHelpSections = [
   {
     title: "Requêtes backend",
@@ -74,12 +115,89 @@ const performanceTaskHelpSections = [
     ],
   },
   {
-    title: "Transcription Demeter",
+    title: "Mistral",
     items: [
       {
-        task: "audio_transcription",
-        description:
-          "Chaîne complète de transcription audio Demeter, avec les étapes de réception, reconstruction, envoi upstream et retour de réponse.",
+        task: "mistral_request_start",
+        description: "Début d'un appel Mistral générique.",
+      },
+      {
+        task: "mistral_request_error",
+        description: "Erreur de construction de la requête Mistral.",
+      },
+      {
+        task: "mistral_response_received",
+        description: "Appel Mistral terminé normalement avec une réponse exploitable.",
+      },
+      {
+        task: "mistral_upstream_error_response",
+        description: "Appel Mistral revenu avec un code HTTP en erreur.",
+      },
+      {
+        task: "mistral_transport_error",
+        description: "Appel Mistral interrompu par une erreur réseau ou transport.",
+      },
+      {
+        task: "mistral_read_error",
+        description: "Appel Mistral interrompu pendant la lecture du corps de réponse.",
+      },
+    ],
+  },
+  {
+    title: "Transcription",
+    items: [
+      {
+        task: "transcription_request_start",
+        description: "Début d'un appel de transcription.",
+      },
+      {
+        task: "transcription_request_error",
+        description: "Erreur de construction de la requête de transcription.",
+      },
+      {
+        task: "transcription_response_received",
+        description: "Transcription terminée normalement avec une réponse exploitable.",
+      },
+      {
+        task: "transcription_upstream_error_response",
+        description: "Transcription revenue avec un code HTTP en erreur.",
+      },
+      {
+        task: "transcription_transport_error",
+        description: "Transcription interrompue par une erreur réseau ou transport.",
+      },
+      {
+        task: "transcription_read_error",
+        description: "Transcription interrompue pendant la lecture du corps de réponse.",
+      },
+    ],
+  },
+  {
+    title: "Génération de CR",
+    items: [
+      {
+        task: "cr_generation_request_start",
+        description: "Début d'une génération de CR.",
+      },
+      {
+        task: "cr_generation_request_error",
+        description: "Erreur de construction de la requête de génération de CR.",
+      },
+      {
+        task: "cr_generation_response_received",
+        description: "Génération de CR terminée normalement avec une réponse exploitable.",
+      },
+      {
+        task: "cr_generation_upstream_error_response",
+        description: "Génération de CR revenue avec un code HTTP en erreur.",
+      },
+      {
+        task: "cr_generation_transport_error",
+        description: "Génération de CR interrompue par une erreur réseau ou transport.",
+      },
+      {
+        task: "cr_generation_read_error",
+        description: "Génération de CR interrompue pendant la lecture du corps de réponse.",
       },
     ],
   },
@@ -311,16 +429,25 @@ function TaskHelpPopover() {
                         {section.title}
                       </h3>
                       <div className="space-y-2">
-                        {section.items.map((item) => (
-                          <div key={item.task} className="rounded-2xl border border-border/60 bg-muted/30 p-3">
-                            <p className="flex flex-wrap items-center gap-2 text-sm font-medium text-foreground">
-                              <code className="rounded-md bg-background px-1.5 py-0.5 font-mono text-[0.8em]">
-                                {item.task}
-                              </code>
-                            </p>
-                            <p className="mt-1 text-sm text-muted-foreground">{item.description}</p>
-                          </div>
-                        ))}
+                        {section.items.map((item) => {
+                          const taskDisplay = formatPerformanceTaskDisplay(item.task)
+                          return (
+                            <div key={item.task} className="rounded-2xl border border-border/60 bg-muted/30 p-3">
+                              <p className="flex flex-wrap items-center gap-2 text-sm font-medium text-foreground">
+                                <span>{taskDisplay.label}</span>
+                                {taskDisplay.detail ? (
+                                  <span className="text-muted-foreground">{taskDisplay.detail}</span>
+                                ) : null}
+                              </p>
+                              <p className="mt-1 text-sm text-muted-foreground">
+                                <code className="rounded-md bg-background px-1.5 py-0.5 font-mono text-[0.8em]">
+                                  {item.task}
+                                </code>
+                              </p>
+                              <p className="mt-1 text-sm text-muted-foreground">{item.description}</p>
+                            </div>
+                          )
+                        })}
                       </div>
                     </section>
                   ))}
@@ -518,12 +645,15 @@ export default function PerformancePage() {
               }
               value={task}
             >
-              <option value="">Toutes les tâches</option>
-              {taskOptions.map((taskOption) => (
-                <option key={taskOption} value={taskOption}>
-                  {toTitleCase(taskOption)}
-                </option>
-              ))}
+                <option value="">Toutes les tâches</option>
+              {taskOptions.map((taskOption) => {
+                const taskDisplay = formatPerformanceTaskDisplay(taskOption)
+                return (
+                  <option key={taskOption} value={taskOption}>
+                    {taskDisplay.detail ? `${taskDisplay.label} · ${taskDisplay.detail}` : taskDisplay.label}
+                  </option>
+                )
+              })}
             </select>
           </div>
           {isSuperAdmin ? (
@@ -602,7 +732,7 @@ export default function PerformancePage() {
         <StatCard
           helper={`Périmètre actif: ${scopeLabel}`}
           label="Tâche la plus lente"
-          value={slowestTask ? toTitleCase(slowestTask.task) : "Aucune donnée"}
+          value={slowestTask ? formatPerformanceTaskDisplay(slowestTask.task).label : "Aucune donnée"}
         />
       </div>
 
@@ -658,38 +788,42 @@ export default function PerformancePage() {
           <CardContent>
             <div className="space-y-3">
               {summary?.topTasks.length ? (
-                summary.topTasks.map((item) => (
-                  <div
-                    className="min-w-0 rounded-2xl border border-border/70 bg-muted/35 p-4"
-                    key={`${item.surface}-${item.component}-${item.task}-${item.route}`}
-                  >
-                    <div className="mb-3 flex flex-wrap items-center gap-2">
-                      <Badge variant={surfaceVariant(item.surface)}>{toTitleCase(item.surface)}</Badge>
-                      <Badge variant="muted">{toTitleCase(item.component)}</Badge>
-                      <Badge variant="default">{toTitleCase(item.task)}</Badge>
-                    </div>
-                    <div className="min-w-0">
-                      <p className="text-xs uppercase tracking-[0.18em] text-muted-foreground">Route</p>
-                      <p className="mt-1 min-w-0 break-words font-mono text-sm font-medium [overflow-wrap:anywhere]">
-                        {item.route}
-                      </p>
-                    </div>
-                    <div className="mt-4 grid min-w-0 gap-3 text-sm sm:grid-cols-3">
-                      <div className="min-w-0 rounded-xl border border-border/50 bg-background/50 p-3">
-                        <p className="text-xs uppercase tracking-[0.18em] text-muted-foreground">Moyenne</p>
-                        <p className="mt-1 font-medium">{formatDurationMs(item.averageDurationMs)}</p>
+                summary.topTasks.map((item) => {
+                  const taskDisplay = formatPerformanceTaskDisplay(item.task)
+                  return (
+                    <div
+                      className="min-w-0 rounded-2xl border border-border/70 bg-muted/35 p-4"
+                      key={`${item.surface}-${item.component}-${item.task}-${item.route}`}
+                    >
+                      <div className="mb-3 flex flex-wrap items-center gap-2">
+                        <Badge variant={surfaceVariant(item.surface)}>{toTitleCase(item.surface)}</Badge>
+                        <Badge variant="muted">{toTitleCase(item.component)}</Badge>
+                        <Badge variant="default">{taskDisplay.label}</Badge>
+                        {taskDisplay.detail ? <span className="text-xs text-muted-foreground">{taskDisplay.detail}</span> : null}
                       </div>
-                      <div className="min-w-0 rounded-xl border border-border/50 bg-background/50 p-3">
-                        <p className="text-xs uppercase tracking-[0.18em] text-muted-foreground">Pic</p>
-                        <p className="mt-1 font-medium">{formatDurationMs(item.maxDurationMs)}</p>
+                      <div className="min-w-0">
+                        <p className="text-xs uppercase tracking-[0.18em] text-muted-foreground">Route</p>
+                        <p className="mt-1 min-w-0 break-words font-mono text-sm font-medium [overflow-wrap:anywhere]">
+                          {item.route}
+                        </p>
                       </div>
-                      <div className="min-w-0 rounded-xl border border-border/50 bg-background/50 p-3">
-                        <p className="text-xs uppercase tracking-[0.18em] text-muted-foreground">Exécutions</p>
-                        <p className="mt-1 font-medium">{item.events}</p>
+                      <div className="mt-4 grid min-w-0 gap-3 text-sm sm:grid-cols-3">
+                        <div className="min-w-0 rounded-xl border border-border/50 bg-background/50 p-3">
+                          <p className="text-xs uppercase tracking-[0.18em] text-muted-foreground">Moyenne</p>
+                          <p className="mt-1 font-medium">{formatDurationMs(item.averageDurationMs)}</p>
+                        </div>
+                        <div className="min-w-0 rounded-xl border border-border/50 bg-background/50 p-3">
+                          <p className="text-xs uppercase tracking-[0.18em] text-muted-foreground">Pic</p>
+                          <p className="mt-1 font-medium">{formatDurationMs(item.maxDurationMs)}</p>
+                        </div>
+                        <div className="min-w-0 rounded-xl border border-border/50 bg-background/50 p-3">
+                          <p className="text-xs uppercase tracking-[0.18em] text-muted-foreground">Exécutions</p>
+                          <p className="mt-1 font-medium">{item.events}</p>
+                        </div>
                       </div>
                     </div>
-                  </div>
-                ))
+                  )
+                })
               ) : (
                 <p className="text-sm text-muted-foreground">Aucune tâche lente détectée sur cette fenêtre.</p>
               )}
@@ -719,21 +853,30 @@ export default function PerformancePage() {
               </thead>
               <tbody>
                 {summary?.recentEvents.length ? (
-                  summary.recentEvents.map((event) => (
-                    <tr className="border-t border-border/70" key={event.eventId}>
-                      <td className="px-6 py-4">{formatDateTime(event.occurredAt)}</td>
-                      <td className="px-6 py-4">
-                        <Badge variant={surfaceVariant(event.surface)}>{toTitleCase(event.surface)}</Badge>
-                      </td>
-                      <td className="px-6 py-4">{toTitleCase(event.component)}</td>
-                      <td className="px-6 py-4">{toTitleCase(event.task)}</td>
-                      <td className="px-6 py-4">{formatDurationMs(event.durationMs)}</td>
-                      <td className="px-6 py-4">
-                        <Badge variant={statusVariant(event.status)}>{toTitleCase(event.status)}</Badge>
-                      </td>
-                      <td className="px-6 py-4 font-mono text-xs text-muted-foreground">{event.route}</td>
-                    </tr>
-                  ))
+                  summary.recentEvents.map((event) => {
+                    const taskDisplay = formatPerformanceTaskDisplay(event.task)
+                    return (
+                      <tr className="border-t border-border/70" key={event.eventId}>
+                        <td className="px-6 py-4">{formatDateTime(event.occurredAt)}</td>
+                        <td className="px-6 py-4">
+                          <Badge variant={surfaceVariant(event.surface)}>{toTitleCase(event.surface)}</Badge>
+                        </td>
+                        <td className="px-6 py-4">{toTitleCase(event.component)}</td>
+                        <td className="px-6 py-4">
+                          <div className="space-y-1">
+                            <div className="font-medium text-foreground">{taskDisplay.label}</div>
+                            {taskDisplay.detail ? <div className="text-xs text-muted-foreground">{taskDisplay.detail}</div> : null}
+                            <code className="block text-xs font-mono text-muted-foreground">{event.task}</code>
+                          </div>
+                        </td>
+                        <td className="px-6 py-4">{formatDurationMs(event.durationMs)}</td>
+                        <td className="px-6 py-4">
+                          <Badge variant={statusVariant(event.status)}>{toTitleCase(event.status)}</Badge>
+                        </td>
+                        <td className="px-6 py-4 font-mono text-xs text-muted-foreground">{event.route}</td>
+                      </tr>
+                    )
+                  })
                 ) : (
                   <tr>
                     <td className="px-6 py-8 text-center text-muted-foreground" colSpan={7}>
@@ -760,7 +903,9 @@ export default function PerformancePage() {
             {summary?.range.from ?? from} → {summary?.range.to ?? to}
           </Badge>
           <span>Tâche:</span>
-          <Badge variant="muted">{task ? toTitleCase(task) : "Toutes les tâches"}</Badge>
+          <Badge variant="muted">
+            {task ? formatPerformanceTaskDisplay(task).label : "Toutes les tâches"}
+          </Badge>
           <span>Événements:</span>
           <Badge variant="muted">{summary?.totals.events ?? 0}</Badge>
         </CardContent>

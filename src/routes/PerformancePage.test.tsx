@@ -84,7 +84,11 @@ describe("PerformancePage", () => {
         averageDurationMs: 2_300,
         maxDurationMs: 4_200,
       },
-      taskOptions: ["cloud_total", "request", "response_received"],
+      taskOptions: [
+        "cr_generation_response_received",
+        "mistral_response_received",
+        "transcription_response_received",
+      ],
       byDay: [
         {
           day: "2026-03-30",
@@ -98,10 +102,10 @@ describe("PerformancePage", () => {
       ],
       topTasks: [
         {
-          surface: "frontend",
-          component: "cloud",
-          task: "cloud_total",
-          route: "/cloudupload",
+          surface: "backend",
+          component: "mistral",
+          task: "transcription_response_received",
+          route: "/v1/audio/transcriptions",
           events: 2,
           successes: 2,
           failures: 0,
@@ -110,18 +114,31 @@ describe("PerformancePage", () => {
           maxDurationMs: 4_200,
           lastOccurredAt: "2026-03-30T16:45:23Z",
         },
+        {
+          surface: "backend",
+          component: "mistral",
+          task: "cr_generation_response_received",
+          route: "/v1/chat/completions",
+          events: 1,
+          successes: 1,
+          failures: 0,
+          totalDurationMs: 1_700,
+          averageDurationMs: 1_700,
+          maxDurationMs: 1_700,
+          lastOccurredAt: "2026-03-30T16:43:10Z",
+        },
       ],
       recentEvents: [
         {
           eventId: "perf-1",
           traceId: "trace-1",
           organizationId: "org-1",
-          surface: "frontend",
-          component: "cloud",
-          task: "cloud_total",
+          surface: "backend",
+          component: "mistral",
+          task: "transcription_response_received",
           status: "success",
           durationMs: 4_200,
-          route: "/cloudupload",
+          route: "/v1/audio/transcriptions",
           metaJson: JSON.stringify({ provider: "whisper" }),
           occurredAt: "2026-03-30T16:45:23Z",
           day: "2026-03-30",
@@ -150,10 +167,13 @@ describe("PerformancePage", () => {
     const taskHelp = screen.getByRole("tooltip")
     expect(taskHelp.parentElement).toBe(document.body)
     expect(taskHelp).toHaveClass("fixed")
-    expect(within(taskHelp).getByText("request")).toBeInTheDocument()
-    expect(within(taskHelp).getByText("audio_transcription")).toBeInTheDocument()
+    expect(within(taskHelp).getByRole("heading", { name: "Mistral" })).toBeInTheDocument()
+    expect(within(taskHelp).getByRole("heading", { name: "Transcription" })).toBeInTheDocument()
+    expect(within(taskHelp).getByRole("heading", { name: "Génération de CR" })).toBeInTheDocument()
+    expect(within(taskHelp).getByText("transcription_response_received")).toBeInTheDocument()
+    expect(within(taskHelp).getByText("cr_generation_response_received")).toBeInTheDocument()
     expect(within(taskHelp).getByText("timeout")).toBeInTheDocument()
-    expect(within(taskHelp).getByText("llm_cloud_total")).toBeInTheDocument()
+    expect(within(taskHelp).getByText("mistral_response_received")).toBeInTheDocument()
 
     fireEvent.keyDown(helperButton, { key: "Escape" })
     expect(screen.queryByRole("tooltip")).not.toBeInTheDocument()
@@ -164,18 +184,17 @@ describe("PerformancePage", () => {
     expect(screen.queryByRole("tooltip")).not.toBeInTheDocument()
 
     const taskSelect = await screen.findByLabelText("Tâche")
-    fireEvent.change(taskSelect, { target: { value: "response_received" } })
+    fireEvent.change(taskSelect, { target: { value: "transcription_response_received" } })
     await waitFor(() =>
       expect(fetchPerformanceSummary).toHaveBeenLastCalledWith({
         from: "2026-03-01",
         to: "2026-03-31",
         organizationId: "org-1",
-        task: "response_received",
+        task: "transcription_response_received",
       }),
     )
-    expect(await screen.findByRole("heading", { name: "Cloud Total" })).toBeInTheDocument()
-    expect(screen.getByRole("heading", { name: "3" })).toBeInTheDocument()
-    expect(screen.getByRole("cell", { name: "/cloudupload" })).toBeInTheDocument()
+    expect(screen.getAllByText(/Transcription/).length).toBeGreaterThan(0)
+    await waitFor(() => expect(screen.getByRole("button", { name: /purger les données/i })).toBeEnabled())
 
     const purgeButton = screen.getByRole("button", { name: /purger les données/i })
     fireEvent.click(purgeButton)
@@ -186,7 +205,7 @@ describe("PerformancePage", () => {
         from: "2026-03-01",
         to: "2026-03-31",
         organizationId: "org-1",
-        task: "response_received",
+        task: "transcription_response_received",
       }),
     )
     await waitFor(() => expect(fetchPerformanceSummary.mock.calls.length).toBeGreaterThanOrEqual(3))
@@ -248,7 +267,7 @@ describe("PerformancePage", () => {
         averageDurationMs: 2_300,
         maxDurationMs: 4_200,
       },
-      taskOptions: ["cloud_total", "request", "response_received"],
+      taskOptions: ["cr_generation_response_received", "mistral_response_received", "transcription_response_received"],
       byDay: [
         {
           day: "2026-03-30",
@@ -262,9 +281,9 @@ describe("PerformancePage", () => {
       ],
       topTasks: [
         {
-          surface: "frontend",
-          component: "cloud",
-          task: "cloud_total",
+          surface: "backend",
+          component: "mistral",
+          task: "transcription_response_received",
           route: longRoute,
           events: 2,
           successes: 2,
@@ -280,12 +299,12 @@ describe("PerformancePage", () => {
           eventId: "perf-1",
           traceId: "trace-1",
           organizationId: "org-1",
-          surface: "frontend",
-          component: "cloud",
-          task: "cloud_total",
+          surface: "backend",
+          component: "mistral",
+          task: "transcription_response_received",
           status: "success",
           durationMs: 4_200,
-          route: "/cloudupload",
+          route: "/v1/audio/transcriptions",
           metaJson: JSON.stringify({ provider: "whisper" }),
           occurredAt: "2026-03-30T16:45:23Z",
           day: "2026-03-30",
@@ -344,7 +363,7 @@ describe("PerformancePage", () => {
         averageDurationMs: 2_300,
         maxDurationMs: 4_200,
       },
-      taskOptions: ["cloud_total", "request", "response_received"],
+      taskOptions: ["cr_generation_response_received", "mistral_response_received", "transcription_response_received"],
       byDay: [
         {
           day: "2026-03-30",
@@ -358,10 +377,10 @@ describe("PerformancePage", () => {
       ],
       topTasks: [
         {
-          surface: "frontend",
-          component: "cloud",
-          task: "cloud_total",
-          route: "/cloudupload",
+          surface: "backend",
+          component: "mistral",
+          task: "transcription_response_received",
+          route: "/v1/audio/transcriptions",
           events: 2,
           successes: 2,
           failures: 0,
@@ -376,12 +395,12 @@ describe("PerformancePage", () => {
           eventId: "perf-1",
           traceId: "trace-1",
           organizationId: "org-1",
-          surface: "frontend",
-          component: "cloud",
-          task: "cloud_total",
+          surface: "backend",
+          component: "mistral",
+          task: "transcription_response_received",
           status: "success",
           durationMs: 4_200,
-          route: "/cloudupload",
+          route: "/v1/audio/transcriptions",
           metaJson: JSON.stringify({ provider: "whisper" }),
           occurredAt: "2026-03-30T16:45:23Z",
           day: "2026-03-30",
