@@ -2,7 +2,7 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query"
 import { useCallback, useEffect, useId, useLayoutEffect, useMemo, useRef, useState } from "react"
 import { useSearchParams } from "react-router-dom"
 import { createPortal } from "react-dom"
-import { CircleHelp, Trash2 } from "lucide-react"
+import { CircleHelp, RefreshCcw, Trash2 } from "lucide-react"
 
 import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
@@ -412,6 +412,13 @@ export default function PerformancePage() {
 
   const summary = summaryQuery.data
   const slowestTask = summary?.topTasks[0]
+  const isRefreshing = summaryQuery.isFetching || organizationsQuery.isFetching
+  const handleRefresh = useCallback(async () => {
+    await Promise.all([
+      summaryQuery.refetch(),
+      isSuperAdmin ? organizationsQuery.refetch() : Promise.resolve(),
+    ])
+  }, [isSuperAdmin, organizationsQuery, summaryQuery])
   const taskOptions = useMemo(() => {
     const values = new Set(summary?.taskOptions ?? [])
     if (task && !values.has(task)) {
@@ -522,6 +529,10 @@ export default function PerformancePage() {
           {isSuperAdmin ? (
             <>
               <div className="flex flex-wrap items-end gap-3 md:col-span-6">
+                <Button className="gap-2" disabled={isRefreshing} onClick={() => handleRefresh()} variant="secondary">
+                  <RefreshCcw className="h-4 w-4" />
+                  {isRefreshing ? "Rafraîchissement..." : "Rafraîchir"}
+                </Button>
                 <Button
                   className="gap-2"
                   disabled={purgeMutation.isPending || (summary?.totals.events ?? 0) === 0}

@@ -43,6 +43,16 @@ const sessionPayload = {
   hasPermission: vi.fn().mockReturnValue(true),
 }
 
+function createDeferred<T>() {
+  let resolve!: (value: T) => void
+  let reject!: (reason?: unknown) => void
+  const promise = new Promise<T>((res, rej) => {
+    resolve = res
+    reject = rej
+  })
+  return { promise, resolve, reject }
+}
+
 describe("BackendErrorsPage", () => {
   beforeEach(() => {
     fetchBackendErrorEvents.mockReset()
@@ -133,5 +143,73 @@ describe("BackendErrorsPage", () => {
         organizationId: "org-1",
       }),
     )
+  })
+
+  it("refreshes the current backend errors scope without changing filters", async () => {
+    const user = userEvent.setup()
+
+    renderWithProviders(<BackendErrorsPage />, {
+      route: "/backend-errors?from=2026-03-01&to=2026-03-31&org=org-1",
+    })
+
+    await screen.findByText("2 événement(s) sur 1 page(s).")
+    await user.click(screen.getByRole("button", { name: "Rafraîchir" }))
+
+    await waitFor(() => expect(fetchBackendErrorEvents).toHaveBeenCalledTimes(2))
+    await waitFor(() => expect(fetchOrganizations).toHaveBeenCalledTimes(2))
+    expect(fetchBackendErrorEvents).toHaveBeenLastCalledWith({
+      from: "2026-03-01",
+      to: "2026-03-31",
+      component: "",
+      route: "",
+      q: "",
+      organizationId: "org-1",
+      page: 1,
+      pageSize: 25,
+    })
+    expect(screen.getByDisplayValue("2026-03-01")).toBeInTheDocument()
+    expect(screen.getByDisplayValue("2026-03-31")).toBeInTheDocument()
+  })
+
+  it("disables the refresh button while backend errors are loading", async () => {
+    const deferredEvents = createDeferred<Awaited<ReturnType<typeof fetchBackendErrorEvents>>>()
+    fetchBackendErrorEvents.mockImplementation(() => deferredEvents.promise)
+
+    renderWithProviders(<BackendErrorsPage />, {
+      route: "/backend-errors?from=2026-03-01&to=2026-03-31&org=org-1",
+    })
+
+    const refreshButton = await screen.findByRole("button", { name: "Rafraîchissement..." })
+    expect(refreshButton).toBeDisabled()
+
+    deferredEvents.resolve({
+      items: [
+        {
+          id: "event-1",
+          traceId: "trace-alpha",
+          userId: "user-1",
+          organizationId: "org-1",
+          component: "admin",
+          route: "/admin/backend-errors",
+          step: "load_error",
+          title: "list_backend_errors",
+          statusCode: 500,
+          durationMs: 32,
+          errorMessage: "boom alpha",
+          payloadJson: JSON.stringify({ error: "boom alpha" }),
+          annexJson: JSON.stringify({
+            provider: "demeter_sante",
+            retry: { attempted: true, succeeded: true, usedRawFile: true },
+          }),
+          recoveryStatus: "raw_retry_succeeded",
+          createdAt: "2026-03-30T15:45:23Z",
+        },
+      ],
+      total: 1,
+      page: 1,
+      pageSize: 25,
+    })
+
+    await waitFor(() => expect(screen.getByRole("button", { name: "Rafraîchir" })).toBeEnabled())
   })
 })

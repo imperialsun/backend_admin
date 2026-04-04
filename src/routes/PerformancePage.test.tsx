@@ -1,4 +1,5 @@
 import { fireEvent, screen, waitFor, within } from "@testing-library/react"
+import userEvent from "@testing-library/user-event"
 import { beforeEach, describe, expect, it, vi } from "vitest"
 
 const performancePageMocks = vi.hoisted(() => ({
@@ -39,6 +40,16 @@ const sessionPayload = {
   isSuperAdmin: true,
   isOrgAdmin: false,
   hasPermission: vi.fn().mockReturnValue(true),
+}
+
+function createDeferred<T>() {
+  let resolve!: (value: T) => void
+  let reject!: (reason?: unknown) => void
+  const promise = new Promise<T>((res, rej) => {
+    resolve = res
+    reject = rej
+  })
+  return { promise, resolve, reject }
 }
 
 describe("PerformancePage", () => {
@@ -196,6 +207,30 @@ describe("PerformancePage", () => {
     expect(screen.queryByRole("button", { name: /purger les données/i })).not.toBeInTheDocument()
   })
 
+  it("refreshes the current performance scope without changing filters", async () => {
+    const user = userEvent.setup()
+
+    renderWithProviders(<PerformancePage />, {
+      route: "/performance?from=2026-03-01&to=2026-03-31&organizationId=org-1",
+    })
+
+    expect(await screen.findByText("Fenêtre de performance")).toBeInTheDocument()
+    await waitFor(() => expect(fetchPerformanceSummary).toHaveBeenCalledTimes(1))
+
+    await user.click(screen.getByRole("button", { name: "Rafraîchir" }))
+
+    await waitFor(() => expect(fetchPerformanceSummary).toHaveBeenCalledTimes(2))
+    await waitFor(() => expect(fetchOrganizations).toHaveBeenCalledTimes(2))
+    expect(fetchPerformanceSummary).toHaveBeenLastCalledWith({
+      from: "2026-03-01",
+      to: "2026-03-31",
+      organizationId: "org-1",
+      task: undefined,
+    })
+    expect(screen.getByDisplayValue("2026-03-01")).toBeInTheDocument()
+    expect(screen.getByDisplayValue("2026-03-31")).toBeInTheDocument()
+  })
+
   it("keeps long routes on their own line in the slow tasks card", async () => {
     const longRoute = "/api/v1/transcriptions/demeter/sessions/very-long-route-name-with-many-segments/and-a-final-tail"
 
@@ -282,5 +317,79 @@ describe("PerformancePage", () => {
     expect(within(statsGrid).getByText("Moyenne")).toBeInTheDocument()
     expect(within(statsGrid).getByText("Pic")).toBeInTheDocument()
     expect(within(statsGrid).getByText("Exécutions")).toBeInTheDocument()
+  })
+
+  it("disables the refresh button while the performance summary is loading", async () => {
+    const deferredSummary = createDeferred<Awaited<ReturnType<typeof fetchPerformanceSummary>>>()
+    fetchPerformanceSummary.mockImplementation(() => deferredSummary.promise)
+
+    renderWithProviders(<PerformancePage />, {
+      route: "/performance?from=2026-03-01&to=2026-03-31&organizationId=org-1",
+    })
+
+    const refreshButton = await screen.findByRole("button", { name: "Rafraîchissement..." })
+    expect(refreshButton).toBeDisabled()
+
+    deferredSummary.resolve({
+      organizationId: "org-1",
+      range: {
+        from: "2026-03-01",
+        to: "2026-03-31",
+      },
+      totals: {
+        events: 3,
+        successes: 2,
+        failures: 1,
+        totalDurationMs: 6_900,
+        averageDurationMs: 2_300,
+        maxDurationMs: 4_200,
+      },
+      taskOptions: ["cloud_total", "request", "response_received"],
+      byDay: [
+        {
+          day: "2026-03-30",
+          events: 2,
+          successes: 2,
+          failures: 0,
+          totalDurationMs: 5_200,
+          averageDurationMs: 2_600,
+          maxDurationMs: 4_200,
+        },
+      ],
+      topTasks: [
+        {
+          surface: "frontend",
+          component: "cloud",
+          task: "cloud_total",
+          route: "/cloudupload",
+          events: 2,
+          successes: 2,
+          failures: 0,
+          totalDurationMs: 5_200,
+          averageDurationMs: 2_600,
+          maxDurationMs: 4_200,
+          lastOccurredAt: "2026-03-30T16:45:23Z",
+        },
+      ],
+      recentEvents: [
+        {
+          eventId: "perf-1",
+          traceId: "trace-1",
+          organizationId: "org-1",
+          surface: "frontend",
+          component: "cloud",
+          task: "cloud_total",
+          status: "success",
+          durationMs: 4_200,
+          route: "/cloudupload",
+          metaJson: JSON.stringify({ provider: "whisper" }),
+          occurredAt: "2026-03-30T16:45:23Z",
+          day: "2026-03-30",
+          createdAt: "2026-03-30T16:45:23Z",
+        },
+      ],
+    })
+
+    await waitFor(() => expect(screen.getByRole("button", { name: "Rafraîchir" })).toBeEnabled())
   })
 })

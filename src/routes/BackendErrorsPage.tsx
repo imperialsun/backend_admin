@@ -1,6 +1,6 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query"
-import { TriangleAlert, Trash2 } from "lucide-react"
-import { useEffect, useMemo, useState } from "react"
+import { RefreshCcw, TriangleAlert, Trash2 } from "lucide-react"
+import { useCallback, useEffect, useMemo, useState } from "react"
 import { useSearchParams } from "react-router-dom"
 
 import { Badge } from "@/components/ui/badge"
@@ -230,6 +230,10 @@ export default function BackendErrorsPage() {
   const selectedPayload = prettyPayload(selectedEvent?.payloadJson ?? "")
   const selectedAnnex = prettyPayload(selectedEvent?.annexJson ?? "")
   const hasAnnex = Boolean(selectedEvent?.annexJson && selectedEvent.annexJson.trim() && selectedEvent.annexJson.trim() !== "{}")
+  const isRefreshing = eventsQuery.isFetching || organizationsQuery.isFetching
+  const handleRefresh = useCallback(async () => {
+    await Promise.all([eventsQuery.refetch(), isSuperAdmin ? organizationsQuery.refetch() : Promise.resolve()])
+  }, [eventsQuery, isSuperAdmin, organizationsQuery])
   const scopeLabel = isSuperAdmin
     ? selectedOrganizationId
       ? organizationsQuery.data?.find((organization) => organization.id === selectedOrganizationId)?.name ??
@@ -409,6 +413,10 @@ export default function BackendErrorsPage() {
             </select>
           </div>
           <div className="flex items-end gap-3 md:col-span-2">
+            <Button className="gap-2" disabled={isRefreshing} onClick={() => handleRefresh()} variant="secondary">
+              <RefreshCcw className="h-4 w-4" />
+              {isRefreshing ? "Rafraîchissement..." : "Rafraîchir"}
+            </Button>
             <Button
               className="gap-2"
               disabled={purgeMutation.isPending || totalEvents === 0}
