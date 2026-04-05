@@ -243,6 +243,7 @@ export async function adminFetch(path: string, init?: AdminFetchOptions) {
         toBackendUrl(path),
         {
           ...(init ?? {}),
+          cache: init?.cache ?? "no-store",
           method,
           headers,
         },

@@ -1,5 +1,5 @@
 import { type ReactNode, useMemo, useState } from "react"
-import { screen } from "@testing-library/react"
+import { screen, waitFor } from "@testing-library/react"
 import userEvent from "@testing-library/user-event"
 import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, it } from "vitest"
 import { Route, Routes } from "react-router-dom"
@@ -13,6 +13,7 @@ import { resetRuntimeConfigForTests } from "@/lib/runtime-config"
 import ActivityPage from "@/routes/ActivityPage"
 import LoginPage from "@/routes/LoginPage"
 import OrganizationsPage from "@/routes/OrganizationsPage"
+import PerformancePage from "@/routes/PerformancePage"
 import UsersPage from "@/routes/UsersPage"
 import { renderWithProviders } from "@/test/test-utils"
 import {
@@ -215,5 +216,98 @@ describe("admin ui smoke integration", () => {
     await screen.findByText("Filtres d’activité")
     await screen.findByText("Transcriptions par provider")
     await screen.findByText("Local Upload")
+  })
+
+  it("refreshes performance data after ingesting new real backend events", async () => {
+    const user = userEvent.setup()
+    const adminSession = await loginAdminDirect(transport, backend.credentials)
+    const organization = await createOrganizationDirect(transport, adminSession.csrfToken ?? "", {
+      code: `perf-${uniqueSuffix("org")}`,
+      name: `Perf Org ${uniqueSuffix("name")}`,
+      status: "active",
+    })
+    const appPassword = "UiPerfPass123!"
+    const appUser = await createUserDirect(transport, adminSession.csrfToken ?? "", organization.id, {
+      email: `perf-user-${uniqueSuffix("email")}@example.com`,
+      password: appPassword,
+      status: "active",
+    })
+    const appSession = await loginAppDirect(transport, {
+      email: appUser.email,
+      password: appPassword,
+    })
+
+    expect(appSession.runtimeMode).toBe("backend")
+
+    const from = new Date(Date.now() - 60 * 60 * 1_000).toISOString()
+    const to = new Date(Date.now() + 60 * 1_000).toISOString()
+
+    const firstEvent = {
+      eventId: uniqueSuffix("ui-performance-1"),
+      traceId: uniqueSuffix("ui-performance-trace-1"),
+      surface: "frontend",
+      component: "cloud",
+      task: "frontend_cloud_total",
+      status: "success",
+      durationMs: 420,
+      route: "/performance-check",
+      occurredAt: new Date().toISOString(),
+      meta: { sourceMode: "cloud_direct" },
+    }
+
+    const secondEvent = {
+      eventId: uniqueSuffix("ui-performance-2"),
+      traceId: uniqueSuffix("ui-performance-trace-2"),
+      surface: "frontend",
+      component: "cloud",
+      task: "frontend_cloud_total",
+      status: "success",
+      durationMs: 860,
+      route: "/performance-check",
+      occurredAt: new Date(Date.now() - 1_000).toISOString(),
+      meta: { sourceMode: "cloud_direct" },
+    }
+
+    await transport.requestJson("/api/v1/performance/events", {
+      body: JSON.stringify({ events: [firstEvent] }),
+      headers: {
+        "Content-Type": "application/json",
+      },
+      method: "POST",
+    })
+
+    renderWithProviders(
+      <AdminSessionContext.Provider value={createStaticSessionValue(adminSession)}>
+        <PerformancePage />
+      </AdminSessionContext.Provider>,
+      { route: `/performance?from=${encodeURIComponent(from)}&to=${encodeURIComponent(to)}&organizationId=${organization.id}` },
+    )
+
+    await screen.findByText("Fenêtre de performance 24 h")
+    const recentExecutionsCard = screen.getByRole("heading", { name: "Dernières exécutions" }).closest("div.rounded-3xl")
+    if (!recentExecutionsCard) {
+      throw new Error("Expected the recent executions card to exist")
+    }
+    await waitFor(() => expect(within(recentExecutionsCard).getAllByText("/performance-check")).toHaveLength(1))
+
+    await transport.requestJson("/api/v1/performance/events", {
+      body: JSON.stringify({ events: [secondEvent] }),
+      headers: {
+        "Content-Type": "application/json",
+      },
+      method: "POST",
+    })
+
+    await user.click(screen.getByRole("button", { name: "Rafraîchir" }))
+
+    await waitFor(() => {
+      const refreshedRecentExecutionsCard = screen
+        .getByRole("heading", { name: "Dernières exécutions" })
+        .closest("div.rounded-3xl")
+      if (!refreshedRecentExecutionsCard) {
+        throw new Error("Expected the recent executions card to exist after refresh")
+      }
+      expect(within(refreshedRecentExecutionsCard).getAllByText("/performance-check")).toHaveLength(2)
+    })
   })
 })

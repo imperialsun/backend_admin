@@ -272,7 +272,6 @@ describe("admin-client", () => {
         maxDurationMs: 42,
       },
       taskOptions: ["request"],
-      byDay: [],
       topTasks: [],
       recentEvents: [],
     })
@@ -282,6 +281,7 @@ describe("admin-client", () => {
         from: "2026-03-01",
         to: "2026-03-31",
         organizationId: "org-1",
+        userId: "user-1",
         task: "request",
       }),
     ).resolves.toMatchObject({
@@ -290,7 +290,7 @@ describe("admin-client", () => {
     })
 
     expect(requestJson).toHaveBeenCalledWith(
-      "/admin/performance/summary?from=2026-03-01&to=2026-03-31&organizationId=org-1&task=request",
+      "/admin/performance/summary?from=2026-03-01&to=2026-03-31&organizationId=org-1&userId=user-1&task=request",
     )
   })
 
@@ -323,12 +323,13 @@ describe("admin-client", () => {
         from: "2026-03-01",
         to: "2026-03-31",
         organizationId: "org-1",
+        userId: "user-1",
         task: "request",
       }),
     ).resolves.toBeUndefined()
 
     expect(requestNoContent).toHaveBeenCalledWith(
-      "/admin/performance?from=2026-03-01&to=2026-03-31&organizationId=org-1&task=request",
+      "/admin/performance?from=2026-03-01&to=2026-03-31&organizationId=org-1&userId=user-1&task=request",
       expect.objectContaining({ method: "DELETE" }),
     )
   })

@@ -75,6 +75,7 @@ describe("admin-api", () => {
     const [, init] = fetchMock.mock.calls[0]
     const headers = init?.headers as Headers
     expect(headers.get("X-Admin-CSRF")).toBeNull()
+    expect(init?.cache).toBe("no-store")
   })
 
   it("retries a 401 after refreshing the admin session and rebuilds the csrf header", async () => {

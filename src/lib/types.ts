@@ -201,15 +201,7 @@ export interface PerformanceSummary {
     maxDurationMs: number
   }
   taskOptions: string[]
-  byDay: Array<{
-    day: string
-    events: number
-    successes: number
-    failures: number
-    totalDurationMs: number
-    averageDurationMs: number
-    maxDurationMs: number
-  }>
+  userId?: string
   topTasks: Array<{
     surface: string
     component: string

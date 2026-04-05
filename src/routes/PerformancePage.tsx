@@ -10,8 +10,21 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { Table, TableWrapper } from "@/components/ui/table"
-import { fetchOrganizations, fetchPerformanceSummary, purgePerformanceEvents } from "@/lib/admin-client"
-import { daysAgoDayString, formatDateTime, formatDay, todayDayString, toTitleCase } from "@/lib/utils"
+import {
+  fetchOrganizations,
+  fetchPerformanceSummary,
+  fetchUsersByOrganization,
+  purgePerformanceEvents,
+} from "@/lib/admin-client"
+import {
+  advanceIsoByDays,
+  applyTimeToIso,
+  formatDateTime,
+  hoursAgoIsoString,
+  nowIsoString,
+  formatTimeLocalInput,
+  toTitleCase,
+} from "@/lib/utils"
 import { useAdminSession } from "@/lib/use-admin-session"
 
 function StatCard({ label, value, helper }: { label: string; value: string | number; helper: string }) {
@@ -71,29 +84,65 @@ function formatPerformanceTaskStep(step: string) {
   return performanceTaskStepLabels[step] ?? toTitleCase(step)
 }
 
+const performanceTaskLabels: Record<string, { label: string; detail?: string }> = {
+  http_request: { label: "Requête HTTP backend" },
+  backend_audio_transcription: { label: "Traitement audio backend" },
+  demeter_audio_transcription: { label: "Transcription audio Demeter" },
+  frontend_audio_decode: { label: "Décodage audio frontend" },
+  frontend_audio_segment_decode: { label: "Décodage segment frontend" },
+  frontend_model_load: { label: "Chargement modèle frontend" },
+  frontend_cloud_decode_ffmpeg: { label: "Décodage FFmpeg cloud" },
+  frontend_cloud_preprocess: { label: "Prétraitement cloud" },
+  frontend_cloud_transcribe: { label: "Transcription cloud" },
+  frontend_cloud_total: { label: "Traitement cloud total" },
+  frontend_llm_local_total: { label: "Génération LLM locale" },
+  frontend_llm_cloud_total: { label: "Génération LLM cloud" },
+  mistral_models: { label: "Client Mistral", detail: "Liste des modèles" },
+  mistral_request: { label: "Client Mistral", detail: "Requête générique" },
+  mistral_audio_transcription: { label: "Client Mistral", detail: "Transcription audio" },
+  mistral_report_generation: { label: "Client Mistral", detail: "Génération de CR" },
+  mistral_report_cri: { label: "Client Mistral", detail: "CRI" },
+  mistral_report_cro: { label: "Client Mistral", detail: "CRO" },
+  mistral_report_crs: { label: "Client Mistral", detail: "CRS" },
+}
+
 function formatPerformanceTaskDisplay(task: string) {
   const normalized = task.trim()
   if (!normalized) {
     return { label: "Inconnue", detail: "" }
   }
 
-  const familyPrefixes = [
-    { prefix: "transcription_", label: "Transcription" },
-    { prefix: "cr_generation_", label: "Génération de CR" },
-    { prefix: "mistral_", label: "Mistral" },
-  ] as const
+  if (performanceTaskLabels[normalized]) {
+    return performanceTaskLabels[normalized]
+  }
 
-  for (const family of familyPrefixes) {
-    if (normalized.startsWith(family.prefix)) {
-      return {
-        label: family.label,
-        detail: formatPerformanceTaskStep(normalized.slice(family.prefix.length)),
-      }
+  if (normalized === "CRI" || normalized === "CRO" || normalized === "CRS") {
+    return {
+      label: "Client Mistral",
+      detail: normalized,
     }
   }
 
-  if (normalized === "audio_transcription") {
-    return { label: "Transcription Demeter", detail: "Historique" }
+  if (normalized.startsWith("mistral_")) {
+    const detail = normalized.slice("mistral_".length)
+    if (detail.startsWith("report_")) {
+      const reportVariant = detail.slice("report_".length)
+      return {
+        label: "Client Mistral",
+        detail: reportVariant.toUpperCase(),
+      }
+    }
+    return {
+      label: "Client Mistral",
+      detail: formatPerformanceTaskStep(detail),
+    }
+  }
+
+  if (normalized.startsWith("frontend_")) {
+    return {
+      label: toTitleCase(normalized.replace(/^frontend_/, "frontend ")),
+      detail: "",
+    }
   }
 
   return { label: toTitleCase(normalized), detail: "" }
@@ -101,10 +150,10 @@ function formatPerformanceTaskDisplay(task: string) {
 
 const performanceTaskHelpSections = [
   {
-    title: "Requêtes backend",
+    title: "Lecture générale",
     items: [
       {
-        task: "request",
+        task: "http_request",
         description:
           "Durée totale d'une requête HTTP backend, du début du traitement jusqu'à la réponse finale, succès ou erreur.",
       },
@@ -112,63 +161,42 @@ const performanceTaskHelpSections = [
         task: "timeout",
         description: "Requête arrivée au délai limite de traitement côté backend.",
       },
-    ],
-  },
-  {
-    title: "Mistral",
-    items: [
       {
-        task: "mistral_request_start",
-        description: "Début d'un appel Mistral générique.",
+        task: "mistral_request",
+        description: "Mesure du client Mistral sur les appels génériques, indépendamment du type de payload.",
       },
       {
-        task: "mistral_request_error",
-        description: "Erreur de construction de la requête Mistral.",
-      },
-      {
-        task: "mistral_response_received",
-        description: "Appel Mistral terminé normalement avec une réponse exploitable.",
-      },
-      {
-        task: "mistral_upstream_error_response",
-        description: "Appel Mistral revenu avec un code HTTP en erreur.",
-      },
-      {
-        task: "mistral_transport_error",
-        description: "Appel Mistral interrompu par une erreur réseau ou transport.",
-      },
-      {
-        task: "mistral_read_error",
-        description: "Appel Mistral interrompu pendant la lecture du corps de réponse.",
+        task: "mistral_models",
+        description: "Durée d'accès à la liste des modèles Mistral, utile pour mesurer la latence de découverte.",
       },
     ],
   },
   {
-    title: "Transcription",
+    title: "Transcription et audio",
     items: [
       {
-        task: "transcription_request_start",
-        description: "Début d'un appel de transcription.",
+        task: "mistral_audio_transcription",
+        description: "Durée de transcription audio côté client Mistral.",
       },
       {
-        task: "transcription_request_error",
-        description: "Erreur de construction de la requête de transcription.",
+        task: "backend_audio_transcription",
+        description: "Durée de traitement audio sur le backend Demeter Santé.",
       },
       {
-        task: "transcription_response_received",
-        description: "Transcription terminée normalement avec une réponse exploitable.",
+        task: "demeter_audio_transcription",
+        description: "Durée de traitement audio par le pipeline Demeter.",
       },
       {
-        task: "transcription_upstream_error_response",
-        description: "Transcription revenue avec un code HTTP en erreur.",
+        task: "frontend_audio_decode",
+        description: "Durée de décodage audio côté frontend user.",
       },
       {
-        task: "transcription_transport_error",
-        description: "Transcription interrompue par une erreur réseau ou transport.",
+        task: "frontend_audio_segment_decode",
+        description: "Durée de décodage d'un segment audio côté frontend user.",
       },
       {
-        task: "transcription_read_error",
-        description: "Transcription interrompue pendant la lecture du corps de réponse.",
+        task: "frontend_cloud_preprocess",
+        description: "Durée du prétraitement audio côté frontend cloud.",
       },
     ],
   },
@@ -176,90 +204,49 @@ const performanceTaskHelpSections = [
     title: "Génération de CR",
     items: [
       {
-        task: "cr_generation_request_start",
-        description: "Début d'une génération de CR.",
+        task: "mistral_report_generation",
+        description: "Durée globale de génération de compte rendu côté client Mistral.",
       },
       {
-        task: "cr_generation_request_error",
-        description: "Erreur de construction de la requête de génération de CR.",
+        task: "mistral_report_cri",
+        description: "Durée de génération du format CRI.",
       },
       {
-        task: "cr_generation_response_received",
-        description: "Génération de CR terminée normalement avec une réponse exploitable.",
+        task: "mistral_report_cro",
+        description: "Durée de génération du format CRO.",
       },
       {
-        task: "cr_generation_upstream_error_response",
-        description: "Génération de CR revenue avec un code HTTP en erreur.",
-      },
-      {
-        task: "cr_generation_transport_error",
-        description: "Génération de CR interrompue par une erreur réseau ou transport.",
-      },
-      {
-        task: "cr_generation_read_error",
-        description: "Génération de CR interrompue pendant la lecture du corps de réponse.",
+        task: "mistral_report_crs",
+        description: "Durée de génération du format CRS.",
       },
     ],
   },
   {
-    title: "Appels upstream",
+    title: "Frontend avancé",
     items: [
       {
-        task: "response_received",
-        description: "Appel vers une API externe terminé normalement avec une réponse exploitable.",
+        task: "frontend_model_load",
+        description: "Durée de chargement complet du modèle ASR côté frontend.",
       },
       {
-        task: "upstream_error_response",
-        description: "Appel vers une API externe revenu avec un code HTTP en erreur.",
+        task: "frontend_cloud_decode_ffmpeg",
+        description: "Durée de décodage ffmpeg dans le parcours cloud frontend.",
       },
       {
-        task: "transport_error",
-        description: "Appel vers une API externe interrompu par une erreur réseau ou transport.",
+        task: "frontend_cloud_transcribe",
+        description: "Durée de transcription cloud côté frontend user.",
       },
       {
-        task: "read_error",
-        description: "Appel vers une API externe interrompu pendant la lecture du corps de réponse.",
-      },
-    ],
-  },
-  {
-    title: "Runs frontend",
-    items: [
-      {
-        task: "load_model_total",
-        description: "Chargement complet du modèle ASR.",
+        task: "frontend_cloud_total",
+        description: "Durée totale d'un run cloud côté frontend user.",
       },
       {
-        task: "decode_audio_total",
-        description: "Décodage audio complet côté frontend.",
+        task: "frontend_llm_local_total",
+        description: "Durée totale d'une génération LLM locale côté frontend user.",
       },
       {
-        task: "decode_audio_segment_total",
-        description: "Décodage d'un segment audio.",
-      },
-      {
-        task: "cloud_decode_ffmpeg",
-        description: "Décodage ffmpeg dans le parcours cloud.",
-      },
-      {
-        task: "cloud_preprocess",
-        description: "Prétraitement du flux audio avant transcription cloud.",
-      },
-      {
-        task: "cloud_transcribe",
-        description: "Transcription cloud elle-même.",
-      },
-      {
-        task: "cloud_total",
-        description: "Durée totale d'un run cloud.",
-      },
-      {
-        task: "llm_local_total",
-        description: "Durée totale d'une génération LLM locale.",
-      },
-      {
-        task: "llm_cloud_total",
-        description: "Durée totale d'une génération LLM cloud.",
+        task: "frontend_llm_cloud_total",
+        description: "Durée totale d'une génération LLM cloud côté frontend user.",
       },
     ],
   },
@@ -417,8 +404,8 @@ function TaskHelpPopover() {
                     Valeurs exactes du champ <span className="font-mono">task</span>
                   </p>
                   <p className="text-sm text-muted-foreground">
-                    Le filtre sélectionne la valeur brute enregistrée en base. Les libellés ci-dessous correspondent aux
-                    tâches actuellement instrumentées.
+                    Le filtre sélectionne la valeur brute enregistrée en base. Les libellés ci-dessous expliquent
+                    précisément ce que mesure chaque timing.
                   </p>
                 </div>
 
@@ -461,15 +448,28 @@ function TaskHelpPopover() {
   )
 }
 
-export default function PerformancePage() {
+function PerformancePageContent() {
   const queryClient = useQueryClient()
   const { isSuperAdmin, session } = useAdminSession()
   const [searchParams, setSearchParams] = useSearchParams()
   const [purgeConfirmationOpen, setPurgeConfirmationOpen] = useState(false)
-  const from = searchParams.get("from") ?? daysAgoDayString(29)
-  const to = searchParams.get("to") ?? todayDayString()
+  const [defaultPerformanceTo] = useState(() => nowIsoString())
+  const [defaultPerformanceFrom] = useState(() => hoursAgoIsoString(24))
+  const from = searchParams.get("from") ?? defaultPerformanceFrom
+  const to = searchParams.get("to") ?? defaultPerformanceTo
   const organizationId = isSuperAdmin ? searchParams.get("organizationId") ?? "" : session?.organization.id ?? ""
+  const scopeOrganizationId = isSuperAdmin ? organizationId : session?.organization.id ?? ""
+  const selectedUserId = searchParams.get("userId") ?? ""
   const task = searchParams.get("task") ?? ""
+  const performanceSummaryQueryKey = [
+    "performance-summary",
+    from,
+    to,
+    organizationId || "global",
+    selectedUserId || "all-users",
+    task || "all",
+  ] as const
+  const organizationUsersQueryKey = ["organization-users", scopeOrganizationId || "none"] as const
 
   const organizationsQuery = useQuery({
     queryKey: ["organizations"],
@@ -477,14 +477,21 @@ export default function PerformancePage() {
     enabled: isSuperAdmin,
   })
 
+  const organizationUsersQuery = useQuery({
+    queryKey: organizationUsersQueryKey,
+    queryFn: () => fetchUsersByOrganization(scopeOrganizationId),
+    enabled: Boolean(scopeOrganizationId),
+  })
+
   const summaryQuery = useQuery({
     enabled: isSuperAdmin,
-    queryKey: ["performance-summary", from, to, organizationId || "global", task || "all"],
+    queryKey: performanceSummaryQueryKey,
     queryFn: () =>
       fetchPerformanceSummary({
         from,
         to,
         organizationId: organizationId || undefined,
+        userId: selectedUserId || undefined,
         task: task || undefined,
       }),
   })
@@ -495,6 +502,7 @@ export default function PerformancePage() {
         from,
         to,
         organizationId: organizationId || undefined,
+        userId: selectedUserId || undefined,
         task: task || undefined,
       }),
     onSuccess: async () => {
@@ -515,16 +523,47 @@ export default function PerformancePage() {
       next.set("to", to)
       changed = true
     }
+    if (isSuperAdmin && searchParams.get("userId") && !organizationId) {
+      next.delete("userId")
+      changed = true
+    }
 
     if (changed) {
       setSearchParams(next, { replace: true })
     }
-  }, [from, searchParams, setSearchParams, to])
+  }, [defaultPerformanceFrom, defaultPerformanceTo, from, isSuperAdmin, organizationId, searchParams, setSearchParams, to])
+
+  useEffect(() => {
+    if (!selectedUserId) {
+      return
+    }
+
+    if (!scopeOrganizationId) {
+      const next = new URLSearchParams(searchParams)
+      next.delete("userId")
+      setSearchParams(next, { replace: true })
+      return
+    }
+
+    if (organizationUsersQuery.isLoading) {
+      return
+    }
+
+    const organizationUsers = organizationUsersQuery.data ?? []
+    if (organizationUsers.some((user) => user.id === selectedUserId)) {
+      return
+    }
+
+    const next = new URLSearchParams(searchParams)
+    next.delete("userId")
+    setSearchParams(next, { replace: true })
+  }, [organizationUsersQuery.data, organizationUsersQuery.isLoading, scopeOrganizationId, searchParams, selectedUserId, setSearchParams])
 
   const updatePerformanceSearchParams = (next: {
     from?: string
     to?: string
     organizationId?: string
+    userId?: string
     task?: string
   }) => {
     const params = new URLSearchParams()
@@ -533,19 +572,14 @@ export default function PerformancePage() {
     if (isSuperAdmin) {
       setSearchParam(params, "organizationId", next.organizationId ?? organizationId)
     }
+    setSearchParam(params, "userId", next.userId ?? selectedUserId)
     setSearchParam(params, "task", next.task ?? task)
     setSearchParams(params, { replace: true })
   }
 
   const summary = summaryQuery.data
   const slowestTask = summary?.topTasks[0]
-  const isRefreshing = summaryQuery.isFetching || organizationsQuery.isFetching
-  const handleRefresh = useCallback(async () => {
-    await Promise.all([
-      summaryQuery.refetch(),
-      isSuperAdmin ? organizationsQuery.refetch() : Promise.resolve(),
-    ])
-  }, [isSuperAdmin, organizationsQuery, summaryQuery])
+  const isRefreshing = summaryQuery.isFetching || organizationsQuery.isFetching || organizationUsersQuery.isFetching
   const taskOptions = useMemo(() => {
     const values = new Set(summary?.taskOptions ?? [])
     if (task && !values.has(task)) {
@@ -553,6 +587,24 @@ export default function PerformancePage() {
     }
     return Array.from(values)
   }, [summary?.taskOptions, task])
+  const organizationUsers = useMemo(() => organizationUsersQuery.data ?? [], [organizationUsersQuery.data])
+  const usersFilterDisabled = !scopeOrganizationId || organizationUsersQuery.isLoading
+  const updatePerformanceTimeSearchParams = (field: "from" | "to", timeValue: string) => {
+    const currentFromTime = formatTimeLocalInput(from)
+    const currentToTime = formatTimeLocalInput(to)
+    const nextFrom =
+      field === "from" ? applyTimeToIso(from, timeValue) || from : applyTimeToIso(from, currentFromTime) || from
+    const nextTo = field === "to" ? applyTimeToIso(to, timeValue) || to : applyTimeToIso(to, currentToTime) || to
+    const normalizedTo = new Date(nextFrom).getTime() >= new Date(nextTo).getTime() ? advanceIsoByDays(nextTo, 1) : nextTo
+
+    updatePerformanceSearchParams({
+      from: nextFrom,
+      to: normalizedTo,
+      organizationId,
+      userId: selectedUserId,
+      task,
+    })
+  }
   const scopeLabel = useMemo(() => {
     if (!isSuperAdmin) {
       return "Administration"
@@ -567,9 +619,10 @@ export default function PerformancePage() {
     <div className="space-y-6">
       <Card>
         <CardHeader>
-          <CardTitle>Fenêtre de performance</CardTitle>
+          <CardTitle>Fenêtre de performance 24 h</CardTitle>
           <CardDescription>
-            Dashboard réservé aux super admin. Les timings backend HTTP et upstream sont agrégés par tâche et par jour.
+            Dashboard réservé aux super admin. Les timings sont agrégés sur une fenêtre glissante de 24 heures et
+            regroupés par tâche, composant et route.
           </CardDescription>
         </CardHeader>
         <CardContent className="grid gap-3 md:grid-cols-6">
@@ -578,15 +631,11 @@ export default function PerformancePage() {
             <Input
               id="performance-from"
               onChange={(event) =>
-                updatePerformanceSearchParams({
-                  from: event.target.value,
-                  to,
-                  organizationId,
-                  task,
-                })
+                updatePerformanceTimeSearchParams("from", event.target.value)
               }
-              type="date"
-              value={from}
+              step={60}
+              type="time"
+              value={formatTimeLocalInput(from)}
             />
           </div>
           <div className="space-y-1.5 md:col-span-3">
@@ -594,15 +643,11 @@ export default function PerformancePage() {
             <Input
               id="performance-to"
               onChange={(event) =>
-                updatePerformanceSearchParams({
-                  from,
-                  to: event.target.value,
-                  organizationId,
-                  task,
-                })
+                updatePerformanceTimeSearchParams("to", event.target.value)
               }
-              type="date"
-              value={to}
+              step={60}
+              type="time"
+              value={formatTimeLocalInput(to)}
             />
           </div>
           {isSuperAdmin ? (
@@ -616,6 +661,7 @@ export default function PerformancePage() {
                     from,
                     to,
                     organizationId: event.target.value,
+                    userId: "",
                     task,
                   })
                 }
@@ -631,6 +677,33 @@ export default function PerformancePage() {
             </div>
           ) : null}
           <div className="space-y-1.5 md:col-span-6">
+            <Label htmlFor="performance-user">Utilisateur</Label>
+            <select
+              className="h-11 w-full rounded-2xl border border-border bg-background px-4 text-sm"
+              disabled={usersFilterDisabled}
+              id="performance-user"
+              onChange={(event) =>
+                updatePerformanceSearchParams({
+                  from,
+                  to,
+                  organizationId,
+                  userId: event.target.value,
+                  task,
+                })
+              }
+              value={scopeOrganizationId ? selectedUserId : ""}
+            >
+              <option value="">
+                {scopeOrganizationId ? "Tous les utilisateurs" : "Sélectionnez une organisation"}
+              </option>
+              {organizationUsers.map((user) => (
+                <option key={user.id} value={user.id}>
+                  {user.email}
+                </option>
+              ))}
+            </select>
+          </div>
+          <div className="space-y-1.5 md:col-span-6">
             <TaskHelpPopover />
             <select
               className="h-11 w-full rounded-2xl border border-border bg-background px-4 text-sm"
@@ -640,12 +713,13 @@ export default function PerformancePage() {
                   from,
                   to,
                   organizationId,
+                  userId: selectedUserId,
                   task: event.target.value,
                 })
               }
               value={task}
             >
-                <option value="">Toutes les tâches</option>
+              <option value="">Toutes les tâches</option>
               {taskOptions.map((taskOption) => {
                 const taskDisplay = formatPerformanceTaskDisplay(taskOption)
                 return (
@@ -659,7 +733,20 @@ export default function PerformancePage() {
           {isSuperAdmin ? (
             <>
               <div className="flex flex-wrap items-end gap-3 md:col-span-6">
-                <Button className="gap-2" disabled={isRefreshing} onClick={() => handleRefresh()} variant="secondary">
+                <Button
+                  className="gap-2"
+                  disabled={isRefreshing}
+                  onClick={() =>
+                    updatePerformanceSearchParams({
+                      from: hoursAgoIsoString(24),
+                      to: nowIsoString(),
+                      organizationId,
+                      userId: selectedUserId,
+                      task,
+                    })
+                  }
+                  variant="secondary"
+                >
                   <RefreshCcw className="h-4 w-4" />
                   {isRefreshing ? "Rafraîchissement..." : "Rafraîchir"}
                 </Button>
@@ -676,9 +763,10 @@ export default function PerformancePage() {
                   variant="secondary"
                   onClick={() =>
                     updatePerformanceSearchParams({
-                      from: daysAgoDayString(29),
-                      to: todayDayString(),
+                      from: hoursAgoIsoString(24),
+                      to: nowIsoString(),
                       organizationId: "",
+                      userId: "",
                       task: "",
                     })
                   }
@@ -734,102 +822,6 @@ export default function PerformancePage() {
           label="Tâche la plus lente"
           value={slowestTask ? formatPerformanceTaskDisplay(slowestTask.task).label : "Aucune donnée"}
         />
-      </div>
-
-      <div className="grid gap-6 xl:grid-cols-[1.2fr_0.8fr]">
-        <Card>
-          <CardHeader>
-            <CardTitle>Tendance journalière</CardTitle>
-            <CardDescription>Vue jour par jour des durées, succès et erreurs sur le scope sélectionné.</CardDescription>
-          </CardHeader>
-          <CardContent>
-            <TableWrapper>
-              <Table>
-                <thead className="bg-background/80 text-xs uppercase tracking-[0.2em] text-muted-foreground">
-                  <tr>
-                    <th className="px-6 py-4">Jour</th>
-                    <th className="px-6 py-4">Exécutions</th>
-                    <th className="px-6 py-4">Succès</th>
-                    <th className="px-6 py-4">Erreurs</th>
-                    <th className="px-6 py-4">Moyenne</th>
-                    <th className="px-6 py-4">Pic</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {summary?.byDay.length ? (
-                    summary.byDay.map((item) => (
-                      <tr className="border-t border-border/70" key={item.day}>
-                        <td className="px-6 py-4 font-medium">{formatDay(item.day)}</td>
-                        <td className="px-6 py-4">{item.events}</td>
-                        <td className="px-6 py-4">{item.successes}</td>
-                        <td className="px-6 py-4">{item.failures}</td>
-                        <td className="px-6 py-4">{formatDurationMs(item.averageDurationMs)}</td>
-                        <td className="px-6 py-4">{formatDurationMs(item.maxDurationMs)}</td>
-                      </tr>
-                    ))
-                  ) : (
-                    <tr>
-                      <td className="px-6 py-8 text-center text-muted-foreground" colSpan={6}>
-                        Aucune donnée sur la fenêtre sélectionnée.
-                      </td>
-                    </tr>
-                  )}
-                </tbody>
-              </Table>
-            </TableWrapper>
-          </CardContent>
-        </Card>
-
-        <Card>
-          <CardHeader>
-            <CardTitle>Top tâches lentes</CardTitle>
-            <CardDescription>Classement des opérations par durée moyenne, route et API.</CardDescription>
-          </CardHeader>
-          <CardContent>
-            <div className="space-y-3">
-              {summary?.topTasks.length ? (
-                summary.topTasks.map((item) => {
-                  const taskDisplay = formatPerformanceTaskDisplay(item.task)
-                  return (
-                    <div
-                      className="min-w-0 rounded-2xl border border-border/70 bg-muted/35 p-4"
-                      key={`${item.surface}-${item.component}-${item.task}-${item.route}`}
-                    >
-                      <div className="mb-3 flex flex-wrap items-center gap-2">
-                        <Badge variant={surfaceVariant(item.surface)}>{toTitleCase(item.surface)}</Badge>
-                        <Badge variant="muted">{toTitleCase(item.component)}</Badge>
-                        <Badge variant="default">{taskDisplay.label}</Badge>
-                        {taskDisplay.detail ? <span className="text-xs text-muted-foreground">{taskDisplay.detail}</span> : null}
-                      </div>
-                      <div className="min-w-0">
-                        <p className="text-xs uppercase tracking-[0.18em] text-muted-foreground">Route</p>
-                        <p className="mt-1 min-w-0 break-words font-mono text-sm font-medium [overflow-wrap:anywhere]">
-                          {item.route}
-                        </p>
-                      </div>
-                      <div className="mt-4 grid min-w-0 gap-3 text-sm sm:grid-cols-3">
-                        <div className="min-w-0 rounded-xl border border-border/50 bg-background/50 p-3">
-                          <p className="text-xs uppercase tracking-[0.18em] text-muted-foreground">Moyenne</p>
-                          <p className="mt-1 font-medium">{formatDurationMs(item.averageDurationMs)}</p>
-                        </div>
-                        <div className="min-w-0 rounded-xl border border-border/50 bg-background/50 p-3">
-                          <p className="text-xs uppercase tracking-[0.18em] text-muted-foreground">Pic</p>
-                          <p className="mt-1 font-medium">{formatDurationMs(item.maxDurationMs)}</p>
-                        </div>
-                        <div className="min-w-0 rounded-xl border border-border/50 bg-background/50 p-3">
-                          <p className="text-xs uppercase tracking-[0.18em] text-muted-foreground">Exécutions</p>
-                          <p className="mt-1 font-medium">{item.events}</p>
-                        </div>
-                      </div>
-                    </div>
-                  )
-                })
-              ) : (
-                <p className="text-sm text-muted-foreground">Aucune tâche lente détectée sur cette fenêtre.</p>
-              )}
-            </div>
-          </CardContent>
-        </Card>
       </div>
 
       <Card>
@@ -892,6 +884,57 @@ export default function PerformancePage() {
 
       <Card>
         <CardHeader>
+          <CardTitle>Top tâches lentes</CardTitle>
+          <CardDescription>Classement des opérations par durée moyenne, route et API.</CardDescription>
+        </CardHeader>
+        <CardContent>
+          <div className="space-y-3">
+            {summary?.topTasks.length ? (
+              summary.topTasks.map((item) => {
+                const taskDisplay = formatPerformanceTaskDisplay(item.task)
+                return (
+                  <div
+                    className="min-w-0 rounded-2xl border border-border/70 bg-muted/35 p-4"
+                    key={`${item.surface}-${item.component}-${item.task}-${item.route}`}
+                  >
+                    <div className="mb-3 flex flex-wrap items-center gap-2">
+                      <Badge variant={surfaceVariant(item.surface)}>{toTitleCase(item.surface)}</Badge>
+                      <Badge variant="muted">{toTitleCase(item.component)}</Badge>
+                      <Badge variant="default">{taskDisplay.label}</Badge>
+                      {taskDisplay.detail ? <span className="text-xs text-muted-foreground">{taskDisplay.detail}</span> : null}
+                    </div>
+                    <div className="min-w-0">
+                      <p className="text-xs uppercase tracking-[0.18em] text-muted-foreground">Route</p>
+                      <p className="mt-1 min-w-0 break-words font-mono text-sm font-medium [overflow-wrap:anywhere]">
+                        {item.route}
+                      </p>
+                    </div>
+                    <div className="mt-4 grid min-w-0 gap-3 text-sm sm:grid-cols-3">
+                      <div className="min-w-0 rounded-xl border border-border/50 bg-background/50 p-3">
+                        <p className="text-xs uppercase tracking-[0.18em] text-muted-foreground">Moyenne</p>
+                        <p className="mt-1 font-medium">{formatDurationMs(item.averageDurationMs)}</p>
+                      </div>
+                      <div className="min-w-0 rounded-xl border border-border/50 bg-background/50 p-3">
+                        <p className="text-xs uppercase tracking-[0.18em] text-muted-foreground">Pic</p>
+                        <p className="mt-1 font-medium">{formatDurationMs(item.maxDurationMs)}</p>
+                      </div>
+                      <div className="min-w-0 rounded-xl border border-border/50 bg-background/50 p-3">
+                        <p className="text-xs uppercase tracking-[0.18em] text-muted-foreground">Exécutions</p>
+                        <p className="mt-1 font-medium">{item.events}</p>
+                      </div>
+                    </div>
+                  </div>
+                )
+              })
+            ) : (
+              <p className="text-sm text-muted-foreground">Aucune tâche lente détectée sur cette fenêtre.</p>
+            )}
+          </div>
+        </CardContent>
+      </Card>
+
+      <Card>
+        <CardHeader>
           <CardTitle>Contexte de lecture</CardTitle>
           <CardDescription>Le tableau de bord reste réservé aux super admin et suit le scope réel du backend.</CardDescription>
         </CardHeader>
@@ -900,7 +943,8 @@ export default function PerformancePage() {
           <Badge variant="muted">{scopeLabel}</Badge>
           <span>Fenêtre:</span>
           <Badge variant="muted">
-            {summary?.range.from ?? from} → {summary?.range.to ?? to}
+            {summary?.range.from ? formatDateTime(summary.range.from) : formatDateTime(from)} →{" "}
+            {summary?.range.to ? formatDateTime(summary.range.to) : formatDateTime(to)}
           </Badge>
           <span>Tâche:</span>
           <Badge variant="muted">
@@ -912,4 +956,8 @@ export default function PerformancePage() {
       </Card>
     </div>
   )
+}
+
+export default function PerformancePage() {
+  return <PerformancePageContent />
 }
