@@ -1,5 +1,6 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query"
 import { useCallback, useEffect, useId, useLayoutEffect, useMemo, useRef, useState } from "react"
+import type { ReactNode } from "react"
 import { useSearchParams } from "react-router-dom"
 import { createPortal } from "react-dom"
 import { CircleHelp, RefreshCcw, Trash2 } from "lucide-react"
@@ -16,6 +17,7 @@ import {
   fetchUsersByOrganization,
   purgePerformanceEvents,
 } from "@/lib/admin-client"
+import type { PerformanceSummary } from "@/lib/types"
 import {
   advanceIsoByDays,
   applyTimeToIso,
@@ -26,6 +28,15 @@ import {
   toTitleCase,
 } from "@/lib/utils"
 import { useAdminSession } from "@/lib/use-admin-session"
+
+type PerformanceEvent = PerformanceSummary["recentEvents"][number]
+
+type PerformanceEventDetailState = {
+  eventId: string
+  title: string
+  summary: string
+  event: PerformanceEvent
+}
 
 function StatCard({ label, value, helper }: { label: string; value: string | number; helper: string }) {
   return (
@@ -54,8 +65,225 @@ function formatDurationMs(value: number) {
   return `${(value / 60_000).toFixed(1)} min`
 }
 
+function formatJsonBlock(value: unknown) {
+  if (value === null || value === undefined) {
+    return "—"
+  }
+
+  try {
+    return JSON.stringify(value, null, 2)
+  } catch {
+    return String(value)
+  }
+}
+
+function parsePerformanceMeta(metaJson: string) {
+  if (!metaJson.trim()) {
+    return null
+  }
+
+  try {
+    return JSON.parse(metaJson) as Record<string, unknown>
+  } catch {
+    return { raw: metaJson }
+  }
+}
+
+function buildPerformanceEventSummary(event: PerformanceEvent) {
+  const taskDisplay = formatPerformanceTaskDisplay(event.task)
+  return `${taskDisplay.label}${taskDisplay.detail ? ` · ${taskDisplay.detail}` : ""} · ${formatPerformanceStatus(event.status)}`
+}
+
+function DetailField({
+  label,
+  value,
+  mono = false,
+  wrap = false,
+  className,
+}: {
+  label: string
+  value: ReactNode
+  mono?: boolean
+  wrap?: boolean
+  className?: string
+}) {
+  return (
+    <div className={className}>
+      <p className="text-xs uppercase tracking-[0.18em] text-muted-foreground">{label}</p>
+      <div className={`mt-1 text-sm ${mono ? "font-mono text-xs" : ""} ${wrap ? "break-words" : ""}`}>{value}</div>
+    </div>
+  )
+}
+
+function PerformanceEventDetailDialog({
+  detail,
+  onClose,
+}: {
+  detail: PerformanceEventDetailState | null
+  onClose: () => void
+}) {
+  const dialogId = useId()
+  const titleId = `${dialogId}-title`
+  const descriptionId = `${dialogId}-description`
+  const closeButtonId = `${dialogId}-close`
+
+  useEffect(() => {
+    if (!detail) {
+      return
+    }
+
+    const handleKeyDown = (event: KeyboardEvent) => {
+      if (event.key === "Escape") {
+        event.preventDefault()
+        onClose()
+      }
+    }
+
+    window.addEventListener("keydown", handleKeyDown)
+    return () => {
+      window.removeEventListener("keydown", handleKeyDown)
+    }
+  }, [detail, onClose])
+
+  useEffect(() => {
+    if (!detail) {
+      return
+    }
+
+    const rafId = window.requestAnimationFrame(() => {
+      document.getElementById(closeButtonId)?.focus()
+    })
+
+    return () => {
+      window.cancelAnimationFrame(rafId)
+    }
+  }, [closeButtonId, detail])
+
+  if (!detail || typeof document === "undefined") {
+    return null
+  }
+
+  const meta = parsePerformanceMeta(detail.event.metaJson)
+
+  return createPortal(
+    <div className="fixed inset-0 z-[80] flex items-center justify-center p-4" onClick={onClose}>
+      <div className="absolute inset-0 bg-black/55" aria-hidden="true" />
+      <div
+        aria-describedby={descriptionId}
+        aria-labelledby={titleId}
+        aria-modal="true"
+        className="relative z-[81] flex max-h-[calc(100vh-2rem)] w-full max-w-5xl flex-col rounded-3xl border border-border/70 bg-background shadow-2xl"
+        role="dialog"
+        onClick={(event) => event.stopPropagation()}
+      >
+        <div className="flex items-start justify-between gap-4 border-b border-border/70 px-6 py-5">
+          <div className="space-y-1">
+            <h2 id={titleId} className="text-xl font-semibold">
+              Détail de l’exécution
+            </h2>
+            <p id={descriptionId} className="text-sm text-muted-foreground">
+              {detail.title}
+            </p>
+          </div>
+          <button
+            id={closeButtonId}
+            type="button"
+            className="inline-flex h-9 items-center justify-center rounded-full border border-border bg-card px-3 text-sm font-medium text-foreground transition hover:bg-card/80 disabled:cursor-not-allowed disabled:opacity-60"
+            onClick={onClose}
+          >
+            Fermer
+          </button>
+        </div>
+
+        <div className="grid gap-6 overflow-auto px-6 py-5 lg:grid-cols-[minmax(0,1.1fr)_minmax(0,0.9fr)]">
+          <section className="space-y-4">
+            <Card className="border-border/70 bg-muted/15">
+              <CardHeader className="pb-3">
+                <CardTitle className="text-base">Résumé</CardTitle>
+                <CardDescription>{detail.summary}</CardDescription>
+              </CardHeader>
+              <CardContent className="grid gap-3 text-sm sm:grid-cols-2">
+                <DetailField label="Horodatage" value={formatDateTime(detail.event.occurredAt)} />
+                <DetailField label="Statut" value={<Badge variant={statusVariant(detail.event.status)}>{formatPerformanceStatus(detail.event.status)}</Badge>} />
+                <DetailField label="Surface" value={<Badge variant={surfaceVariant(detail.event.surface)}>{toTitleCase(detail.event.surface)}</Badge>} />
+                <DetailField label="Composant" value={toTitleCase(detail.event.component)} />
+                <DetailField label="Tâche" value={detail.event.task} mono />
+                <DetailField label="Durée" value={formatDurationMs(detail.event.durationMs)} />
+                <DetailField label="Route" value={detail.event.route} mono wrap />
+                <DetailField label="Trace" value={detail.event.traceId} mono wrap />
+                <DetailField label="Event ID" value={detail.event.eventId} mono wrap className="sm:col-span-2" />
+              </CardContent>
+            </Card>
+
+            <Card className="border-border/70 bg-muted/15">
+              <CardHeader className="pb-3">
+                <CardTitle className="text-base">Métadonnées</CardTitle>
+                <CardDescription>Payload enrichi associé à l’exécution.</CardDescription>
+              </CardHeader>
+              <CardContent className="space-y-3 text-sm">
+                <div className="grid gap-3 sm:grid-cols-2">
+                  <DetailField label="Surface brute" value={detail.event.surface} mono />
+                  <DetailField label="Créée le" value={formatDateTime(detail.event.createdAt)} />
+                  <DetailField label="Jour" value={detail.event.day} mono />
+                  <DetailField label="Organisation" value={detail.event.organizationId ?? "—"} mono wrap />
+                  <DetailField label="Utilisateur" value={detail.event.userId ?? "—"} mono wrap />
+                  <DetailField label="Marqueur" value={detail.event.traceId} mono wrap />
+                </div>
+                <div>
+                  <p className="mb-2 text-xs font-medium uppercase tracking-[0.18em] text-muted-foreground">Meta JSON</p>
+                  <pre className="max-h-72 overflow-auto rounded-2xl border border-border/70 bg-background p-4 text-xs leading-6 text-muted-foreground">
+                    {detail.event.metaJson || "—"}
+                  </pre>
+                </div>
+                {meta ? (
+                  <div>
+                    <p className="mb-2 text-xs font-medium uppercase tracking-[0.18em] text-muted-foreground">Meta parsées</p>
+                    <pre className="max-h-72 overflow-auto rounded-2xl border border-border/70 bg-background p-4 text-xs leading-6 text-muted-foreground">
+                      {formatJsonBlock(meta)}
+                    </pre>
+                  </div>
+                ) : null}
+              </CardContent>
+            </Card>
+          </section>
+
+          <section className="space-y-4">
+            <Card className="border-border/70 bg-muted/15">
+              <CardHeader className="pb-3">
+                <CardTitle className="text-base">Détail technique</CardTitle>
+                <CardDescription>Vue complète pour audit et support.</CardDescription>
+              </CardHeader>
+              <CardContent>
+                <pre className="max-h-[42rem] overflow-auto rounded-2xl border border-border/70 bg-background p-4 text-[11px] leading-6 text-muted-foreground">
+                  {formatJsonBlock(detail.event)}
+                </pre>
+              </CardContent>
+            </Card>
+          </section>
+        </div>
+      </div>
+    </div>,
+    document.body,
+  )
+}
+
 function statusVariant(status: string) {
-  return status.toLowerCase() === "success" ? ("success" as const) : ("danger" as const)
+  const normalized = status.trim().toLowerCase()
+  if (normalized === "success") {
+    return "success" as const
+  }
+  if (normalized === "token_expired") {
+    return "muted" as const
+  }
+  return "danger" as const
+}
+
+function formatPerformanceStatus(status: string) {
+  const normalized = status.trim().toLowerCase()
+  if (normalized === "token_expired") {
+    return "Token expiré"
+  }
+  return toTitleCase(status)
 }
 
 function surfaceVariant(surface: string) {
@@ -453,6 +681,7 @@ function PerformancePageContent() {
   const { isSuperAdmin, session } = useAdminSession()
   const [searchParams, setSearchParams] = useSearchParams()
   const [purgeConfirmationOpen, setPurgeConfirmationOpen] = useState(false)
+  const [selectedPerformanceEvent, setSelectedPerformanceEvent] = useState<PerformanceEventDetailState | null>(null)
   const [defaultPerformanceTo] = useState(() => nowIsoString())
   const [defaultPerformanceFrom] = useState(() => hoursAgoIsoString(24))
   const from = searchParams.get("from") ?? defaultPerformanceFrom
@@ -614,6 +843,16 @@ function PerformancePageContent() {
     }
     return organizationsQuery.data?.find((organization) => organization.id === organizationId)?.name ?? organizationId
   }, [isSuperAdmin, organizationId, organizationsQuery.data])
+
+  useEffect(() => {
+    if (!selectedPerformanceEvent || !summary?.recentEvents.length) {
+      return
+    }
+    const stillVisible = summary.recentEvents.some((event) => event.eventId === selectedPerformanceEvent.eventId)
+    if (!stillVisible) {
+      setSelectedPerformanceEvent(null)
+    }
+  }, [selectedPerformanceEvent, summary?.recentEvents])
 
   return (
     <div className="space-y-6">
@@ -841,12 +1080,14 @@ function PerformancePageContent() {
                   <th className="px-6 py-4">Durée</th>
                   <th className="px-6 py-4">Statut</th>
                   <th className="px-6 py-4">Route</th>
+                  <th className="px-6 py-4 text-right">Détail</th>
                 </tr>
               </thead>
               <tbody>
                 {summary?.recentEvents.length ? (
                   summary.recentEvents.map((event) => {
                     const taskDisplay = formatPerformanceTaskDisplay(event.task)
+                    const detailTitle = `${taskDisplay.label}${taskDisplay.detail ? ` · ${taskDisplay.detail}` : ""}`
                     return (
                       <tr className="border-t border-border/70" key={event.eventId}>
                         <td className="px-6 py-4">{formatDateTime(event.occurredAt)}</td>
@@ -863,15 +1104,31 @@ function PerformancePageContent() {
                         </td>
                         <td className="px-6 py-4">{formatDurationMs(event.durationMs)}</td>
                         <td className="px-6 py-4">
-                          <Badge variant={statusVariant(event.status)}>{toTitleCase(event.status)}</Badge>
+                          <Badge variant={statusVariant(event.status)}>{formatPerformanceStatus(event.status)}</Badge>
                         </td>
                         <td className="px-6 py-4 font-mono text-xs text-muted-foreground">{event.route}</td>
+                        <td className="px-6 py-4 text-right">
+                          <Button
+                            size="sm"
+                            variant="secondary"
+                            onClick={() =>
+                              setSelectedPerformanceEvent({
+                                eventId: event.eventId,
+                                title: detailTitle,
+                                summary: buildPerformanceEventSummary(event),
+                                event,
+                              })
+                            }
+                          >
+                            Voir
+                          </Button>
+                        </td>
                       </tr>
                     )
                   })
                 ) : (
                   <tr>
-                    <td className="px-6 py-8 text-center text-muted-foreground" colSpan={7}>
+                    <td className="px-6 py-8 text-center text-muted-foreground" colSpan={8}>
                       Aucun timing remonté sur la fenêtre sélectionnée.
                     </td>
                   </tr>
@@ -881,6 +1138,8 @@ function PerformancePageContent() {
           </TableWrapper>
         </CardContent>
       </Card>
+
+      <PerformanceEventDetailDialog detail={selectedPerformanceEvent} onClose={() => setSelectedPerformanceEvent(null)} />
 
       <Card>
         <CardHeader>

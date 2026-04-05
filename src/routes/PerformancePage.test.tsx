@@ -160,6 +160,21 @@ describe("PerformancePage", () => {
       ],
       recentEvents: [
         {
+          eventId: "perf-0",
+          traceId: "trace-0",
+          organizationId: "org-1",
+          surface: "backend",
+          component: "auth",
+          task: "http_request",
+          status: "token_expired",
+          durationMs: 120,
+          route: "/auth/refresh",
+          metaJson: JSON.stringify({ reason: "refresh token expired" }),
+          occurredAt: "2026-03-30T16:46:23Z",
+          day: "2026-03-30",
+          createdAt: "2026-03-30T16:46:23Z",
+        },
+        {
           eventId: "perf-1",
           traceId: "trace-1",
           organizationId: "org-1",
@@ -247,6 +262,9 @@ describe("PerformancePage", () => {
       }),
     )
     expect(screen.getByRole("heading", { name: "Client Mistral" })).toBeInTheDocument()
+    const tokenExpiredBadge = await screen.findByText("Token expiré")
+    expect(tokenExpiredBadge).toHaveClass("bg-muted")
+    expect(tokenExpiredBadge).not.toHaveClass("bg-rose-500/12")
     expect(screen.getByRole("heading", { name: "Dernières exécutions" })).toBeInTheDocument()
     expect(screen.getByRole("heading", { name: "Top tâches lentes" })).toBeInTheDocument()
     const recentExecutionsHeading = screen.getByRole("heading", { name: "Dernières exécutions" })
@@ -492,6 +510,30 @@ describe("PerformancePage", () => {
     expect(within(statsGrid).getByText("Moyenne")).toBeInTheDocument()
     expect(within(statsGrid).getByText("Pic")).toBeInTheDocument()
     expect(within(statsGrid).getByText("Exécutions")).toBeInTheDocument()
+  })
+
+  it("opens a detail modal from the recent executions table", async () => {
+    const user = userEvent.setup()
+
+    renderWithProviders(<PerformancePage />, {
+      route: "/performance?from=2026-03-01&to=2026-03-31&organizationId=org-1",
+    })
+
+    expect(await screen.findByText(/Fenêtre de performance/)).toBeInTheDocument()
+    await waitFor(() => expect(fetchPerformanceSummary).toHaveBeenCalledTimes(1))
+
+    const voirButtons = screen.getAllByRole("button", { name: "Voir" })
+    expect(voirButtons).toHaveLength(2)
+
+    await user.click(voirButtons[0]!)
+
+    const dialog = await screen.findByRole("dialog", { name: "Détail de l’exécution" })
+    expect(within(dialog).getByText("perf-0")).toBeInTheDocument()
+    expect(within(dialog).getByText("/auth/refresh")).toBeInTheDocument()
+    expect(within(dialog).getByText("Token expiré")).toBeInTheDocument()
+
+    await user.keyboard("{Escape}")
+    expect(screen.queryByRole("dialog", { name: "Détail de l’exécution" })).not.toBeInTheDocument()
   })
 
   it("disables the refresh button while the performance summary is loading", async () => {
