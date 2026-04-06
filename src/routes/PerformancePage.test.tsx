@@ -126,6 +126,13 @@ describe("PerformancePage", () => {
       },
       taskOptions: [
         "frontend_cloud_total",
+        "reception_de_slice",
+        "reconstruction_fichier",
+        "validation_ffprobe",
+        "backend_audio_transcription",
+        "preparation_des_chunks",
+        "transcodage_ffmpeg",
+        "erreur_backend",
         "mistral_models",
         "http_request",
         "mistral_audio_transcription",
@@ -226,6 +233,13 @@ describe("PerformancePage", () => {
     expect(within(taskHelp).getByRole("heading", { name: "Génération de CR" })).toBeInTheDocument()
     expect(within(taskHelp).getByRole("heading", { name: "Frontend avancé" })).toBeInTheDocument()
     expect(within(taskHelp).getByText("http_request")).toBeInTheDocument()
+    expect(within(taskHelp).getByText("reception_de_slice")).toBeInTheDocument()
+    expect(within(taskHelp).getByText("reconstruction_fichier")).toBeInTheDocument()
+    expect(within(taskHelp).getByText("validation_ffprobe")).toBeInTheDocument()
+    expect(within(taskHelp).getByText("backend_audio_transcription")).toBeInTheDocument()
+    expect(within(taskHelp).getByText("preparation_des_chunks")).toBeInTheDocument()
+    expect(within(taskHelp).getByText("transcodage_ffmpeg")).toBeInTheDocument()
+    expect(within(taskHelp).getByText("erreur_backend")).toBeInTheDocument()
     expect(within(taskHelp).getByText("mistral_models")).toBeInTheDocument()
     expect(within(taskHelp).getByText("mistral_audio_transcription")).toBeInTheDocument()
     expect(within(taskHelp).getByText("mistral_report_generation")).toBeInTheDocument()
@@ -241,6 +255,12 @@ describe("PerformancePage", () => {
 
     const taskSelect = await screen.findByLabelText("Tâche")
     expect(screen.getByRole("option", { name: "Client Mistral · Liste des modèles" })).toBeInTheDocument()
+    expect(screen.getByRole("option", { name: "Réception de slice" })).toBeInTheDocument()
+    expect(screen.getByRole("option", { name: "Validation ffprobe" })).toBeInTheDocument()
+    expect(screen.getByRole("option", { name: "Traitement audio" })).toBeInTheDocument()
+    expect(screen.getByRole("option", { name: "Préparation des chunks" })).toBeInTheDocument()
+    expect(screen.getByRole("option", { name: "Transcodage ffmpeg" })).toBeInTheDocument()
+    expect(screen.getByRole("option", { name: "Erreur backend" })).toBeInTheDocument()
     fireEvent.change(taskSelect, { target: { value: "mistral_audio_transcription" } })
     await waitFor(() =>
       expect(fetchPerformanceSummary).toHaveBeenLastCalledWith({
@@ -380,6 +400,13 @@ describe("PerformancePage", () => {
       },
       taskOptions: [
         "frontend_cloud_total",
+        "reception_de_slice",
+        "reconstruction_fichier",
+        "validation_ffprobe",
+        "backend_audio_transcription",
+        "preparation_des_chunks",
+        "transcodage_ffmpeg",
+        "erreur_backend",
         "mistral_models",
         "http_request",
         "mistral_audio_transcription",
@@ -451,7 +478,13 @@ describe("PerformancePage", () => {
         averageDurationMs: 2_300,
         maxDurationMs: 4_200,
       },
-      taskOptions: ["frontend_cloud_total", "mistral_audio_transcription", "mistral_report_generation"],
+      taskOptions: [
+        "frontend_cloud_total",
+        "validation_ffprobe",
+        "transcodage_ffmpeg",
+        "mistral_audio_transcription",
+        "mistral_report_generation",
+      ],
       topTasks: [
         {
           surface: "backend",
@@ -561,7 +594,13 @@ describe("PerformancePage", () => {
         averageDurationMs: 2_300,
         maxDurationMs: 4_200,
       },
-      taskOptions: ["frontend_cloud_total", "mistral_audio_transcription", "mistral_report_generation"],
+      taskOptions: [
+        "frontend_cloud_total",
+        "validation_ffprobe",
+        "transcodage_ffmpeg",
+        "mistral_audio_transcription",
+        "mistral_report_generation",
+      ],
       topTasks: [
         {
           surface: "backend",

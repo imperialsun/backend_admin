@@ -314,7 +314,13 @@ function formatPerformanceTaskStep(step: string) {
 
 const performanceTaskLabels: Record<string, { label: string; detail?: string }> = {
   http_request: { label: "Requête HTTP backend" },
-  backend_audio_transcription: { label: "Traitement audio backend" },
+  reception_de_slice: { label: "Réception de slice" },
+  reconstruction_fichier: { label: "Reconstruction fichier" },
+  validation_ffprobe: { label: "Validation ffprobe" },
+  backend_audio_transcription: { label: "Traitement audio" },
+  preparation_des_chunks: { label: "Préparation des chunks" },
+  transcodage_ffmpeg: { label: "Transcodage ffmpeg" },
+  erreur_backend: { label: "Erreur backend" },
   demeter_audio_transcription: { label: "Transcription audio Demeter" },
   frontend_audio_decode: { label: "Décodage audio frontend" },
   frontend_audio_segment_decode: { label: "Décodage segment frontend" },
@@ -403,12 +409,36 @@ const performanceTaskHelpSections = [
     title: "Transcription et audio",
     items: [
       {
-        task: "mistral_audio_transcription",
-        description: "Durée de transcription audio côté client Mistral.",
+        task: "reception_de_slice",
+        description: "Durée de réception d'une slice audio côté backend Demeter.",
+      },
+      {
+        task: "reconstruction_fichier",
+        description: "Durée de reconstruction du fichier source à partir des slices.",
+      },
+      {
+        task: "validation_ffprobe",
+        description: "Durée de validation du fichier source via ffprobe.",
       },
       {
         task: "backend_audio_transcription",
-        description: "Durée de traitement audio sur le backend Demeter Santé.",
+        description: "Durée du traitement audio global côté backend Demeter avant le découpage.",
+      },
+      {
+        task: "preparation_des_chunks",
+        description: "Durée de calcul des chunks avant l'envoi vers Mistral.",
+      },
+      {
+        task: "transcodage_ffmpeg",
+        description: "Durée de transcodage ffmpeg de chaque chunk avant l'envoi vers Mistral.",
+      },
+      {
+        task: "erreur_backend",
+        description: "Durée d'un échec backend Demeter pour suivre les validations et incidents de pipeline.",
+      },
+      {
+        task: "mistral_audio_transcription",
+        description: "Durée de transcription audio côté client Mistral.",
       },
       {
         task: "demeter_audio_transcription",
