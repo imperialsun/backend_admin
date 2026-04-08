@@ -874,15 +874,12 @@ function PerformancePageContent() {
     return organizationsQuery.data?.find((organization) => organization.id === organizationId)?.name ?? organizationId
   }, [isSuperAdmin, organizationId, organizationsQuery.data])
 
-  useEffect(() => {
-    if (!selectedPerformanceEvent || !summary?.recentEvents.length) {
-      return
-    }
-    const stillVisible = summary.recentEvents.some((event) => event.eventId === selectedPerformanceEvent.eventId)
-    if (!stillVisible) {
-      setSelectedPerformanceEvent(null)
-    }
-  }, [selectedPerformanceEvent, summary?.recentEvents])
+  const visibleSelectedPerformanceEvent =
+    selectedPerformanceEvent && summary?.recentEvents.length
+      ? summary.recentEvents.some((event) => event.eventId === selectedPerformanceEvent.eventId)
+        ? selectedPerformanceEvent
+        : null
+      : null
 
   return (
     <div className="space-y-6">
@@ -1169,7 +1166,10 @@ function PerformancePageContent() {
         </CardContent>
       </Card>
 
-      <PerformanceEventDetailDialog detail={selectedPerformanceEvent} onClose={() => setSelectedPerformanceEvent(null)} />
+      <PerformanceEventDetailDialog
+        detail={visibleSelectedPerformanceEvent}
+        onClose={() => setSelectedPerformanceEvent(null)}
+      />
 
       <Card>
         <CardHeader>
