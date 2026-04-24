@@ -258,6 +258,8 @@ export interface DemeterQueueWorkerSnapshot {
 
 export interface DemeterQueueOperationSnapshot {
   operationId: string
+  organizationId?: string
+  userId?: string
   queueId: number
   status: string
   stage: string
@@ -267,6 +269,9 @@ export interface DemeterQueueOperationSnapshot {
   statusCode: number
   createdAt: string
   updatedAt: string
+  finishedAt?: string
+  queuePayloadJson?: string
+  responseJson?: string
   lastError?: string
 }
 
@@ -275,4 +280,5 @@ export interface DemeterQueueSnapshot {
   summary: DemeterQueueSummarySnapshot
   workers: DemeterQueueWorkerSnapshot[]
   operations: DemeterQueueOperationSnapshot[]
+  allOperations: DemeterQueueOperationSnapshot[]
 }

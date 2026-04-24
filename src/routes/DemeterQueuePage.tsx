@@ -1,5 +1,5 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query"
-import { RefreshCcw, Save, Server, Waves } from "lucide-react"
+import { ChevronDown, ChevronRight, FileText, RefreshCcw, Save, Server, Waves } from "lucide-react"
 import { useState, type FormEvent } from "react"
 
 import { Badge } from "@/components/ui/badge"
@@ -12,7 +12,7 @@ import { fetchDemeterQueueSnapshot, updateDemeterQueueSettings } from "@/lib/adm
 import type { DemeterQueueOperationSnapshot, DemeterQueueSummarySnapshot, DemeterQueueWorkerSnapshot } from "@/lib/types"
 import { formatDateTime } from "@/lib/utils"
 
-const QUEUE_SNAPSHOT_LIMIT = 200
+const QUEUE_SNAPSHOT_LIMIT = 500
 const MAX_PARALLELISM = 8
 
 function StatCard({ label, value, helper }: { label: string; value: string | number; helper: string }) {
@@ -34,6 +34,31 @@ function formatProgress(value: number) {
     return "0 %"
   }
   return `${Math.round(Math.max(0, Math.min(1, value)) * 100)} %`
+}
+
+function formatMaybeDateTime(value?: string) {
+  const trimmed = value?.trim() ?? ""
+  if (!trimmed) {
+    return "—"
+  }
+  return formatDateTime(trimmed)
+}
+
+function formatMaybeText(value?: string) {
+  const trimmed = value?.trim() ?? ""
+  return trimmed || "—"
+}
+
+function prettyJson(value?: string) {
+  const trimmed = value?.trim() ?? ""
+  if (!trimmed) {
+    return "—"
+  }
+  try {
+    return JSON.stringify(JSON.parse(trimmed), null, 2)
+  } catch {
+    return trimmed
+  }
 }
 
 function laneStateLabel(worker: DemeterQueueWorkerSnapshot) {
@@ -314,6 +339,111 @@ function OperationRow({ operation }: { operation: DemeterQueueOperationSnapshot 
   )
 }
 
+function DetailField({ label, value }: { label: string; value: string }) {
+  return (
+    <div className="rounded-2xl border border-border/70 bg-background/80 p-4">
+      <p className="text-[11px] uppercase tracking-[0.18em] text-muted-foreground">{label}</p>
+      <p className="mt-2 break-words text-sm font-medium">{value}</p>
+    </div>
+  )
+}
+
+function JsonPanel({ title, value }: { title: string; value?: string }) {
+  return (
+    <section className="rounded-3xl border border-border/70 bg-background/80 p-4">
+      <div className="flex items-center gap-2">
+        <FileText className="h-4 w-4 text-muted-foreground" />
+        <h3 className="text-sm font-semibold">{title}</h3>
+      </div>
+      <pre className="mt-3 max-h-72 overflow-auto whitespace-pre-wrap break-words rounded-2xl border border-border/70 bg-muted/40 p-4 text-[11px] leading-6 text-muted-foreground">
+        {prettyJson(value)}
+      </pre>
+    </section>
+  )
+}
+
+function CompactOperationRow({ operation }: { operation: DemeterQueueOperationSnapshot }) {
+  const [open, setOpen] = useState(false)
+  const queueLabel = operation.queueId > 0 ? `Lane #${operation.queueId}` : "Non assignée"
+  const progress = formatProgress(operation.progress)
+  const detailId = `demeter-operation-details-${operation.operationId}`
+
+  return (
+    <>
+      <tr className={open ? "border-t border-border/70 bg-muted/20" : "border-t border-border/70"}>
+        <td className="px-6 py-4 align-top">
+          <div className="flex flex-col gap-3">
+            <div>
+              <p className="font-medium break-words">{operation.operationId}</p>
+              <p className="text-xs text-muted-foreground">Créée {formatMaybeDateTime(operation.createdAt)}</p>
+            </div>
+            <Button
+              aria-controls={detailId}
+              aria-expanded={open}
+              aria-label={`${open ? "Masquer" : "Afficher"} les détails de ${operation.operationId}`}
+              className="justify-start gap-2 px-3 text-xs"
+              onClick={() => setOpen((value) => !value)}
+              size="sm"
+              variant="ghost"
+            >
+              {open ? <ChevronDown className="h-4 w-4" /> : <ChevronRight className="h-4 w-4" />}
+              {open ? "Masquer" : "Détails"}
+            </Button>
+          </div>
+        </td>
+        <td className="px-6 py-4 align-top">
+          <Badge variant={operation.queueId > 0 ? "default" : "danger"}>{queueLabel}</Badge>
+        </td>
+        <td className="px-6 py-4 align-top">
+          <div className="flex flex-wrap gap-2">
+            <Badge variant={statusBadgeVariant(operation.status)}>{operation.status}</Badge>
+            <Badge variant="muted">{stepLabel(operation.stage)}</Badge>
+          </div>
+        </td>
+        <td className="px-6 py-4 align-top">
+          <p className="font-medium">{operation.chunkIndex + 1}</p>
+          <p className="text-xs text-muted-foreground">sur {operation.chunkCount}</p>
+        </td>
+        <td className="px-6 py-4 align-top">
+          <p className="font-medium">{progress}</p>
+        </td>
+        <td className="px-6 py-4 align-top">
+          <Badge variant={operation.statusCode >= 500 || operation.statusCode >= 400 ? "danger" : "muted"}>
+            {operation.statusCode}
+          </Badge>
+        </td>
+        <td className="px-6 py-4 align-top text-sm text-muted-foreground">{formatMaybeDateTime(operation.updatedAt)}</td>
+      </tr>
+      {open ? (
+        <tr className="border-t border-border/70 bg-muted/20" id={detailId}>
+          <td className="px-6 py-5" colSpan={7}>
+            <div className="grid gap-4 xl:grid-cols-2">
+              <div className="grid gap-3 sm:grid-cols-2">
+                <DetailField label="Organisation" value={formatMaybeText(operation.organizationId)} />
+                <DetailField label="Utilisateur" value={formatMaybeText(operation.userId)} />
+                <DetailField label="Queue" value={queueLabel} />
+                <DetailField label="Statut" value={operation.status} />
+                <DetailField label="Étape" value={stepLabel(operation.stage)} />
+                <DetailField label="HTTP" value={String(operation.statusCode)} />
+                <DetailField label="Chunk" value={`${operation.chunkIndex + 1}/${operation.chunkCount}`} />
+                <DetailField label="Progression" value={progress} />
+                <DetailField label="Créée le" value={formatMaybeDateTime(operation.createdAt)} />
+                <DetailField label="Terminée le" value={formatMaybeDateTime(operation.finishedAt)} />
+                <DetailField label="Dernière mise à jour" value={formatMaybeDateTime(operation.updatedAt)} />
+                <DetailField label="Dernière erreur" value={formatMaybeText(operation.lastError)} />
+              </div>
+              <div className="grid gap-4">
+                <JsonPanel title="Queue payload JSON" value={operation.queuePayloadJson} />
+                <JsonPanel title="Response JSON" value={operation.responseJson} />
+              </div>
+            </div>
+          </td>
+        </tr>
+      ) : null}
+    </>
+  )
+}
+
 export default function DemeterQueuePage() {
   const queryClient = useQueryClient()
   const [parallelismDraft, setParallelismDraft] = useState("1")
@@ -344,7 +474,8 @@ export default function DemeterQueuePage() {
 
   const summary = snapshotQuery.data?.summary
   const workers = snapshotQuery.data?.workers ?? []
-  const operations = snapshotQuery.data?.operations ?? []
+  const queueOperations = snapshotQuery.data?.operations ?? []
+  const allOperations = snapshotQuery.data?.allOperations ?? []
 
   const statCards = [
     {
@@ -540,7 +671,7 @@ export default function DemeterQueuePage() {
             {workers.map((worker) => (
               <WorkerCard
                 key={worker.queueId}
-                operation={resolveWorkerOperation(worker, operations)}
+                operation={resolveWorkerOperation(worker, queueOperations)}
                 retryPause={summary}
                 worker={worker}
               />
@@ -574,14 +705,52 @@ export default function DemeterQueuePage() {
               </tr>
             </thead>
             <tbody>
-              {operations.length === 0 ? (
+              {queueOperations.length === 0 ? (
                 <tr className="border-t border-border/70">
                   <td className="px-6 py-8 text-sm text-muted-foreground" colSpan={8}>
                     Aucune opération Demeter en file.
                   </td>
                 </tr>
               ) : (
-                operations.map((operation) => <OperationRow key={operation.operationId} operation={operation} />)
+                queueOperations.map((operation) => <OperationRow key={operation.operationId} operation={operation} />)
+              )}
+            </tbody>
+          </Table>
+        </TableWrapper>
+      </section>
+
+      <section className="space-y-4">
+        <div className="flex items-center gap-3">
+          <FileText className="h-5 w-5 text-muted-foreground" />
+          <div>
+            <h2 className="text-xl font-semibold">Toutes les opérations</h2>
+            <p className="text-sm text-muted-foreground">
+              Vue compacte des enregistrements stockés, avec détail dépliable pour les payloads et les réponses.
+            </p>
+          </div>
+        </div>
+        <TableWrapper>
+          <Table>
+            <thead className="bg-background/80 text-xs uppercase tracking-[0.2em] text-muted-foreground">
+              <tr>
+                <th className="px-6 py-4">Opération</th>
+                <th className="px-6 py-4">Queue</th>
+                <th className="px-6 py-4">Statut</th>
+                <th className="px-6 py-4">Chunk</th>
+                <th className="px-6 py-4">Progression</th>
+                <th className="px-6 py-4">HTTP</th>
+                <th className="px-6 py-4">Mis à jour</th>
+              </tr>
+            </thead>
+            <tbody>
+              {allOperations.length === 0 ? (
+                <tr className="border-t border-border/70">
+                  <td className="px-6 py-8 text-sm text-muted-foreground" colSpan={7}>
+                    Aucune opération enregistrée dans la table.
+                  </td>
+                </tr>
+              ) : (
+                allOperations.map((operation) => <CompactOperationRow key={operation.operationId} operation={operation} />)
               )}
             </tbody>
           </Table>

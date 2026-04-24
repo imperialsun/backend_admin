@@ -10,7 +10,7 @@
     "docs:check": "node scripts/docs-validate.mjs",
     "lint": "eslint .",
     "test": "vitest --exclude \"src/integration/**/*.integration.test.{ts,tsx}\"",
-    "test:ci": "vitest --run --coverage --exclude \"src/integration/**/*.integration.test.{ts,tsx}\" --pool=threads --maxWorkers=1 --no-file-parallelism",
+    "test:ci": "vitest --run --coverage --exclude \"src/integration/**/*.integration.test.{ts,tsx}\" --maxWorkers=1 --no-file-parallelism",
     "test:integration": "vitest --config vitest.integration.config.ts --run --maxWorkers=1 --fileParallelism=false",
     "preview": "vite preview"
   },

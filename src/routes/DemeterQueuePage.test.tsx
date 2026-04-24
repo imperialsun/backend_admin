@@ -91,6 +91,59 @@ const baseSnapshot = {
       updatedAt: "2026-04-23T15:50:00Z",
     },
   ],
+  allOperations: [
+    {
+      operationId: "op-1",
+      queueId: 1,
+      status: "running",
+      stage: "chunk_completed",
+      chunkIndex: 4,
+      chunkCount: 10,
+      progress: 0.3,
+      statusCode: 202,
+      createdAt: "2026-04-23T15:55:00Z",
+      updatedAt: "2026-04-23T16:02:00Z",
+      lastError: "",
+    },
+    {
+      operationId: "op-2",
+      queueId: 2,
+      status: "pending",
+      stage: "queued",
+      chunkIndex: 0,
+      chunkCount: 2,
+      progress: 0,
+      statusCode: 202,
+      createdAt: "2026-04-23T15:50:00Z",
+      updatedAt: "2026-04-23T15:50:00Z",
+    },
+    {
+      operationId: "op-3",
+      organizationId: "org-full-1",
+      userId: "user-full-1",
+      queueId: 0,
+      status: "completed",
+      stage: "completed",
+      chunkIndex: 10,
+      chunkCount: 10,
+      progress: 1,
+      statusCode: 200,
+      createdAt: "2026-04-23T15:30:00Z",
+      updatedAt: "2026-04-23T16:05:00Z",
+      finishedAt: "2026-04-23T16:05:00Z",
+      queuePayloadJson: JSON.stringify({
+        sourceMode: "backend",
+        nested: {
+          foo: "bar",
+        },
+      }),
+      responseJson: JSON.stringify({
+        text: "Transcription complète",
+        segments: [],
+      }),
+      lastError: "",
+    },
+  ],
 }
 
 describe("DemeterQueuePage", () => {
@@ -126,6 +179,15 @@ describe("DemeterQueuePage", () => {
     expect(screen.getAllByText("Lane #1").length).toBeGreaterThan(0)
     expect(screen.getAllByText("4/10").length).toBeGreaterThan(0)
     expect(screen.getAllByText("30 %").length).toBeGreaterThan(0)
+    expect(screen.getByText("Toutes les opérations")).toBeInTheDocument()
+    expect(screen.getByRole("button", { name: "Afficher les détails de op-3" })).toBeInTheDocument()
+
+    await user.click(screen.getByRole("button", { name: "Afficher les détails de op-3" }))
+    expect(await screen.findByText("Queue payload JSON")).toBeInTheDocument()
+    expect(screen.getByText("org-full-1")).toBeInTheDocument()
+    expect(screen.getByText("user-full-1")).toBeInTheDocument()
+    expect(screen.getByText(/"sourceMode": "backend"/)).toBeInTheDocument()
+    expect(screen.getByText(/"text": "Transcription complète"/)).toBeInTheDocument()
 
     await user.clear(screen.getByLabelText("Workers parallèles"))
     await user.type(screen.getByLabelText("Workers parallèles"), "4")
