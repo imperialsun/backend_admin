@@ -10,6 +10,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { Table, TableWrapper } from "@/components/ui/table"
+import { copyTextToClipboard } from "@/lib/clipboard"
 import {
   fetchBackendErrorEvents,
   fetchOrganizations,
@@ -125,31 +126,6 @@ function buildBackendErrorClipboardText(event: BackendErrorEvent, payload: strin
   }
 
   return lines.join("\n")
-}
-
-async function copyTextToClipboard(text: string) {
-  if (navigator.clipboard?.writeText) {
-    await navigator.clipboard.writeText(text)
-    return
-  }
-
-  const textarea = document.createElement("textarea")
-  textarea.value = text
-  textarea.setAttribute("readonly", "true")
-  textarea.style.position = "fixed"
-  textarea.style.top = "0"
-  textarea.style.left = "0"
-  textarea.style.opacity = "0"
-  document.body.appendChild(textarea)
-  textarea.focus()
-  textarea.select()
-
-  const copied = document.execCommand("copy")
-  document.body.removeChild(textarea)
-
-  if (!copied) {
-    throw new Error("copy-failed")
-  }
 }
 
 function BackendErrorDetailModal(props: {
@@ -308,7 +284,9 @@ export default function BackendErrorsPage() {
   const [selectedEventId, setSelectedEventId] = useState<string>("")
   const [purgeConfirmationOpen, setPurgeConfirmationOpen] = useState(false)
   const [copyState, setCopyState] = useState<"idle" | "copied" | "error">("idle")
+  const [rowCopyState, setRowCopyState] = useState<{ eventId: string; status: "copied" | "error" } | null>(null)
   const copyResetTimer = useRef<number | null>(null)
+  const rowCopyResetTimer = useRef<number | null>(null)
 
   const from = searchParams.get("from") ?? daysAgoDayString(29)
   const to = searchParams.get("to") ?? todayDayString()
@@ -426,6 +404,9 @@ export default function BackendErrorsPage() {
       if (copyResetTimer.current !== null) {
         window.clearTimeout(copyResetTimer.current)
       }
+      if (rowCopyResetTimer.current !== null) {
+        window.clearTimeout(rowCopyResetTimer.current)
+      }
     }
   }, [])
 
@@ -515,6 +496,24 @@ export default function BackendErrorsPage() {
       }, 2000)
     }
   }, [detailClipboardText, selectedEvent])
+  const handleCopyRowJson = useCallback(async (event: BackendErrorEvent) => {
+    if (rowCopyResetTimer.current !== null) {
+      window.clearTimeout(rowCopyResetTimer.current)
+      rowCopyResetTimer.current = null
+    }
+
+    try {
+      await copyTextToClipboard(JSON.stringify(event, null, 2))
+      setRowCopyState({ eventId: event.id, status: "copied" })
+    } catch {
+      setRowCopyState({ eventId: event.id, status: "error" })
+    }
+
+    rowCopyResetTimer.current = window.setTimeout(() => {
+      setRowCopyState(null)
+      rowCopyResetTimer.current = null
+    }, 2000)
+  }, [])
   const scopeLabel = isSuperAdmin
     ? selectedOrganizationId
       ? organizationsQuery.data?.find((organization) => organization.id === selectedOrganizationId)?.name ??
@@ -816,7 +815,7 @@ export default function BackendErrorsPage() {
                       <th className="px-6 py-4">Étape</th>
                       <th className="px-6 py-4">Statut</th>
                       <th className="px-6 py-4">Message</th>
-                      <th className="px-6 py-4 text-right">Action</th>
+                      <th className="px-6 py-4 text-right">Actions</th>
                     </tr>
                   </thead>
                   <tbody>
@@ -856,13 +855,32 @@ export default function BackendErrorsPage() {
                             </td>
                             <td className="px-6 py-4 max-w-[280px] truncate">{event.errorMessage || event.title}</td>
                             <td className="px-6 py-4 text-right">
-                              <Button
-                                size="sm"
-                                variant={selected ? "primary" : "secondary"}
-                                onClick={() => setSelectedEventId(event.id)}
-                              >
-                                Voir
-                              </Button>
+                              <div className="flex justify-end gap-2">
+                                <Button
+                                  className="gap-2"
+                                  size="sm"
+                                  variant="secondary"
+                                  onClick={() => handleCopyRowJson(event)}
+                                >
+                                  {rowCopyState?.eventId === event.id && rowCopyState.status === "copied" ? (
+                                    <Check className="h-4 w-4" />
+                                  ) : (
+                                    <Copy className="h-4 w-4" />
+                                  )}
+                                  {rowCopyState?.eventId === event.id
+                                    ? rowCopyState.status === "copied"
+                                      ? "Copié"
+                                      : "Erreur"
+                                    : "Copier"}
+                                </Button>
+                                <Button
+                                  size="sm"
+                                  variant={selected ? "primary" : "secondary"}
+                                  onClick={() => setSelectedEventId(event.id)}
+                                >
+                                  Voir
+                                </Button>
+                              </div>
                             </td>
                           </tr>
                         )

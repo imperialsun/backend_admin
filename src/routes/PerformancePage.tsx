@@ -3,7 +3,7 @@ import { useCallback, useEffect, useId, useLayoutEffect, useMemo, useRef, useSta
 import type { ReactNode } from "react"
 import { useSearchParams } from "react-router-dom"
 import { createPortal } from "react-dom"
-import { CircleHelp, RefreshCcw, Trash2 } from "lucide-react"
+import { Check, CircleHelp, Copy, RefreshCcw, Trash2 } from "lucide-react"
 
 import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
@@ -11,6 +11,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { Table, TableWrapper } from "@/components/ui/table"
+import { copyTextToClipboard } from "@/lib/clipboard"
 import {
   fetchOrganizations,
   fetchPerformanceSummary,
@@ -30,6 +31,8 @@ import {
 import { useAdminSession } from "@/lib/use-admin-session"
 
 type PerformanceEvent = PerformanceSummary["recentEvents"][number]
+
+const defaultPerformancePageSize = 20
 
 type PerformanceEventDetailState = {
   eventId: string
@@ -290,7 +293,21 @@ function surfaceVariant(surface: string) {
   return surface.toLowerCase() === "frontend" ? ("muted" as const) : ("default" as const)
 }
 
-function setSearchParam(params: URLSearchParams, key: string, value: string | undefined) {
+function parsePositiveInt(value: string | null, fallback: number) {
+  const parsed = Number.parseInt((value ?? "").trim(), 10)
+  if (!Number.isFinite(parsed) || parsed <= 0) {
+    return fallback
+  }
+  return parsed
+}
+
+function setSearchParam(params: URLSearchParams, key: string, value: string | number | undefined) {
+  if (typeof value === "number") {
+    if (Number.isFinite(value) && value > 0) {
+      params.set(key, String(value))
+    }
+    return
+  }
   const trimmed = value?.trim() ?? ""
   if (trimmed) {
     params.set(key, trimmed)
@@ -776,6 +793,8 @@ function PerformancePageContent() {
   const [searchParams, setSearchParams] = useSearchParams()
   const [purgeConfirmationOpen, setPurgeConfirmationOpen] = useState(false)
   const [selectedPerformanceEvent, setSelectedPerformanceEvent] = useState<PerformanceEventDetailState | null>(null)
+  const [rowCopyState, setRowCopyState] = useState<{ eventId: string; status: "copied" | "error" } | null>(null)
+  const rowCopyResetTimer = useRef<number | null>(null)
   const [defaultPerformanceTo] = useState(() => nowIsoString())
   const [defaultPerformanceFrom] = useState(() => hoursAgoIsoString(24))
   const from = searchParams.get("from") ?? defaultPerformanceFrom
@@ -784,6 +803,8 @@ function PerformancePageContent() {
   const scopeOrganizationId = isSuperAdmin ? organizationId : session?.organization.id ?? ""
   const selectedUserId = searchParams.get("userId") ?? ""
   const task = searchParams.get("task") ?? ""
+  const page = parsePositiveInt(searchParams.get("page"), 1)
+  const pageSize = parsePositiveInt(searchParams.get("pageSize"), defaultPerformancePageSize)
   const performanceSummaryQueryKey = [
     "performance-summary",
     from,
@@ -791,6 +812,8 @@ function PerformancePageContent() {
     organizationId || "global",
     selectedUserId || "all-users",
     task || "all",
+    page,
+    pageSize,
   ] as const
   const organizationUsersQueryKey = ["organization-users", scopeOrganizationId || "none"] as const
 
@@ -816,6 +839,8 @@ function PerformancePageContent() {
         organizationId: organizationId || undefined,
         userId: selectedUserId || undefined,
         task: task || undefined,
+        page,
+        pageSize,
       }),
   })
 
@@ -850,11 +875,27 @@ function PerformancePageContent() {
       next.delete("userId")
       changed = true
     }
+    if (!searchParams.get("page")) {
+      next.set("page", String(page))
+      changed = true
+    }
+    if (!searchParams.get("pageSize")) {
+      next.set("pageSize", String(pageSize))
+      changed = true
+    }
 
     if (changed) {
       setSearchParams(next, { replace: true })
     }
-  }, [defaultPerformanceFrom, defaultPerformanceTo, from, isSuperAdmin, organizationId, searchParams, setSearchParams, to])
+  }, [defaultPerformanceFrom, defaultPerformanceTo, from, isSuperAdmin, organizationId, page, pageSize, searchParams, setSearchParams, to])
+
+  useEffect(() => {
+    return () => {
+      if (rowCopyResetTimer.current !== null) {
+        window.clearTimeout(rowCopyResetTimer.current)
+      }
+    }
+  }, [])
 
   useEffect(() => {
     if (!selectedUserId) {
@@ -888,6 +929,8 @@ function PerformancePageContent() {
     organizationId?: string
     userId?: string
     task?: string
+    page?: number
+    pageSize?: number
   }) => {
     const params = new URLSearchParams()
     setSearchParam(params, "from", next.from ?? from)
@@ -897,11 +940,15 @@ function PerformancePageContent() {
     }
     setSearchParam(params, "userId", next.userId ?? selectedUserId)
     setSearchParam(params, "task", next.task ?? task)
+    setSearchParam(params, "page", next.page ?? 1)
+    setSearchParam(params, "pageSize", next.pageSize ?? pageSize)
     setSearchParams(params, { replace: true })
   }
 
   const summary = summaryQuery.data
   const slowestTask = summary?.topTasks[0]
+  const totalEvents = summary?.totals.events ?? 0
+  const totalPages = Math.max(1, Math.ceil(totalEvents / pageSize))
   const isRefreshing = summaryQuery.isFetching || organizationsQuery.isFetching || organizationUsersQuery.isFetching
   const taskOptions = useMemo(() => {
     const values = new Set(summary?.taskOptions ?? [])
@@ -937,6 +984,24 @@ function PerformancePageContent() {
     }
     return organizationsQuery.data?.find((organization) => organization.id === organizationId)?.name ?? organizationId
   }, [isSuperAdmin, organizationId, organizationsQuery.data])
+  const handleCopyRowJson = useCallback(async (event: PerformanceEvent) => {
+    if (rowCopyResetTimer.current !== null) {
+      window.clearTimeout(rowCopyResetTimer.current)
+      rowCopyResetTimer.current = null
+    }
+
+    try {
+      await copyTextToClipboard(JSON.stringify(event, null, 2))
+      setRowCopyState({ eventId: event.eventId, status: "copied" })
+    } catch {
+      setRowCopyState({ eventId: event.eventId, status: "error" })
+    }
+
+    rowCopyResetTimer.current = window.setTimeout(() => {
+      setRowCopyState(null)
+      rowCopyResetTimer.current = null
+    }, 2000)
+  }, [])
 
   const visibleSelectedPerformanceEvent =
     selectedPerformanceEvent && summary?.recentEvents.length
@@ -1060,6 +1125,30 @@ function PerformancePageContent() {
               })}
             </select>
           </div>
+          <div className="space-y-1.5 md:col-span-3">
+            <Label htmlFor="performance-page-size">Taille page</Label>
+            <select
+              className="h-11 w-full rounded-2xl border border-border bg-background px-4 text-sm"
+              id="performance-page-size"
+              onChange={(event) =>
+                updatePerformanceSearchParams({
+                  from,
+                  to,
+                  organizationId,
+                  userId: selectedUserId,
+                  task,
+                  page: 1,
+                  pageSize: Number.parseInt(event.target.value, 10),
+                })
+              }
+              value={String(pageSize)}
+            >
+              <option value="10">10</option>
+              <option value="20">20</option>
+              <option value="50">50</option>
+              <option value="100">100</option>
+            </select>
+          </div>
           {isSuperAdmin ? (
             <>
               <div className="flex flex-wrap items-end gap-3 md:col-span-6">
@@ -1073,6 +1162,8 @@ function PerformancePageContent() {
                       organizationId,
                       userId: selectedUserId,
                       task,
+                      page: 1,
+                      pageSize,
                     })
                   }
                   variant="secondary"
@@ -1098,6 +1189,8 @@ function PerformancePageContent() {
                       organizationId: "",
                       userId: "",
                       task: "",
+                      page: 1,
+                      pageSize: defaultPerformancePageSize,
                     })
                   }
                 >
@@ -1157,7 +1250,9 @@ function PerformancePageContent() {
       <Card>
         <CardHeader>
           <CardTitle>Dernières exécutions</CardTitle>
-          <CardDescription>Historique détaillé des derniers timings remontés au backend.</CardDescription>
+          <CardDescription>
+            Historique détaillé des timings remontés au backend, page {page} sur {totalPages}.
+          </CardDescription>
         </CardHeader>
         <CardContent>
           <TableWrapper>
@@ -1171,7 +1266,7 @@ function PerformancePageContent() {
                   <th className="px-6 py-4">Durée</th>
                   <th className="px-6 py-4">Statut</th>
                   <th className="px-6 py-4">Route</th>
-                  <th className="px-6 py-4 text-right">Détail</th>
+                  <th className="px-6 py-4 text-right">Actions</th>
                 </tr>
               </thead>
               <tbody>
@@ -1199,20 +1294,39 @@ function PerformancePageContent() {
                         </td>
                         <td className="px-6 py-4 font-mono text-xs text-muted-foreground">{event.route}</td>
                         <td className="px-6 py-4 text-right">
-                          <Button
-                            size="sm"
-                            variant="secondary"
-                            onClick={() =>
-                              setSelectedPerformanceEvent({
-                                eventId: event.eventId,
-                                title: detailTitle,
-                                summary: buildPerformanceEventSummary(event),
-                                event,
-                              })
-                            }
-                          >
-                            Voir
-                          </Button>
+                          <div className="flex justify-end gap-2">
+                            <Button
+                              className="gap-2"
+                              size="sm"
+                              variant="secondary"
+                              onClick={() => handleCopyRowJson(event)}
+                            >
+                              {rowCopyState?.eventId === event.eventId && rowCopyState.status === "copied" ? (
+                                <Check className="h-4 w-4" />
+                              ) : (
+                                <Copy className="h-4 w-4" />
+                              )}
+                              {rowCopyState?.eventId === event.eventId
+                                ? rowCopyState.status === "copied"
+                                  ? "Copié"
+                                  : "Erreur"
+                                : "Copier"}
+                            </Button>
+                            <Button
+                              size="sm"
+                              variant="secondary"
+                              onClick={() =>
+                                setSelectedPerformanceEvent({
+                                  eventId: event.eventId,
+                                  title: detailTitle,
+                                  summary: buildPerformanceEventSummary(event),
+                                  event,
+                                })
+                              }
+                            >
+                              Voir
+                            </Button>
+                          </div>
                         </td>
                       </tr>
                     )
@@ -1229,6 +1343,48 @@ function PerformancePageContent() {
           </TableWrapper>
         </CardContent>
       </Card>
+
+      <div className="flex flex-col gap-3 rounded-3xl border border-border/70 bg-card/80 p-4 md:flex-row md:items-center md:justify-between">
+        <p className="text-sm text-muted-foreground">
+          Page {page} sur {totalPages} · {pageSize} événements par page
+        </p>
+        <div className="flex gap-2">
+          <Button
+            disabled={page <= 1 || summaryQuery.isLoading}
+            onClick={() =>
+              updatePerformanceSearchParams({
+                from,
+                to,
+                organizationId,
+                userId: selectedUserId,
+                task,
+                page: page - 1,
+                pageSize,
+              })
+            }
+            variant="secondary"
+          >
+            Précédent
+          </Button>
+          <Button
+            disabled={page >= totalPages || summaryQuery.isLoading}
+            onClick={() =>
+              updatePerformanceSearchParams({
+                from,
+                to,
+                organizationId,
+                userId: selectedUserId,
+                task,
+                page: page + 1,
+                pageSize,
+              })
+            }
+            variant="secondary"
+          >
+            Suivant
+          </Button>
+        </div>
+      </div>
 
       <PerformanceEventDetailDialog
         detail={visibleSelectedPerformanceEvent}

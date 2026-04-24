@@ -8,6 +8,7 @@ const performancePageMocks = vi.hoisted(() => ({
   fetchUsersByOrganization: vi.fn(),
   purgePerformanceEvents: vi.fn(),
   useAdminSession: vi.fn(),
+  execCommand: vi.fn(),
 }))
 
 vi.mock("@/lib/utils", async () => {
@@ -40,6 +41,7 @@ const {
   purgePerformanceEvents,
   useAdminSession,
 } = performancePageMocks
+const { execCommand } = performancePageMocks
 
 const sessionPayload = {
   loading: false,
@@ -79,6 +81,26 @@ describe("PerformancePage", () => {
     fetchUsersByOrganization.mockReset()
     purgePerformanceEvents.mockReset()
     useAdminSession.mockReset()
+    execCommand.mockReset()
+
+    const clipboard = navigator.clipboard as { writeText?: (text: string) => Promise<void> } | undefined
+    if (clipboard) {
+      Object.defineProperty(clipboard, "writeText", {
+        configurable: true,
+        value: execCommand,
+      })
+    } else {
+      Object.defineProperty(navigator, "clipboard", {
+        configurable: true,
+        value: {
+          writeText: execCommand,
+        },
+      })
+    }
+    Object.defineProperty(document, "execCommand", {
+      configurable: true,
+      value: execCommand,
+    })
 
     useAdminSession.mockReturnValue(sessionPayload)
     fetchOrganizations.mockResolvedValue([
@@ -224,6 +246,8 @@ describe("PerformancePage", () => {
       organizationId: "org-1",
       userId: undefined,
       task: undefined,
+      page: 1,
+      pageSize: 20,
     })
     const userSelect = screen.getByRole("combobox", { name: "Utilisateur" })
     expect(userSelect).toBeEnabled()
@@ -287,6 +311,8 @@ describe("PerformancePage", () => {
         organizationId: "org-1",
         userId: undefined,
         task: "mistral_audio_transcription",
+        page: 1,
+        pageSize: 20,
       }),
     )
     fireEvent.change(userSelect, { target: { value: "user-1" } })
@@ -297,6 +323,8 @@ describe("PerformancePage", () => {
         organizationId: "org-1",
         userId: "user-1",
         task: "mistral_audio_transcription",
+        page: 1,
+        pageSize: 20,
       }),
     )
     expect(screen.getByRole("heading", { name: "Client Mistral" })).toBeInTheDocument()
@@ -364,9 +392,65 @@ describe("PerformancePage", () => {
       organizationId: "org-1",
       userId: undefined,
       task: undefined,
+      page: 1,
+      pageSize: 20,
     })
     expect(screen.getByLabelText("Du")).toHaveAttribute("type", "time")
     expect(screen.getByLabelText("Au")).toHaveAttribute("type", "time")
+  })
+
+  it("paginates recent performance executions through the summary request", async () => {
+    const user = userEvent.setup()
+
+    fetchPerformanceSummary.mockResolvedValue({
+      organizationId: "org-1",
+      range: {
+        from: "2026-03-01T00:00:00.000Z",
+        to: "2026-03-31T23:59:59.999Z",
+      },
+      totals: {
+        events: 25,
+        successes: 24,
+        failures: 1,
+        totalDurationMs: 6_900,
+        averageDurationMs: 2_300,
+        maxDurationMs: 4_200,
+      },
+      taskOptions: ["http_request"],
+      topTasks: [],
+      recentEvents: [],
+    })
+
+    renderWithProviders(<PerformancePage />, {
+      route: "/performance?from=2026-03-01&to=2026-03-31&organizationId=org-1&page=1&pageSize=10",
+    })
+
+    expect(await screen.findByText("Page 1 sur 3 · 10 événements par page")).toBeInTheDocument()
+    await waitFor(() =>
+      expect(fetchPerformanceSummary).toHaveBeenLastCalledWith({
+        from: "2026-03-01",
+        to: "2026-03-31",
+        organizationId: "org-1",
+        userId: undefined,
+        task: undefined,
+        page: 1,
+        pageSize: 10,
+      }),
+    )
+
+    await user.click(screen.getByRole("button", { name: "Suivant" }))
+
+    await waitFor(() =>
+      expect(fetchPerformanceSummary).toHaveBeenLastCalledWith({
+        from: "2026-03-01",
+        to: "2026-03-31",
+        organizationId: "org-1",
+        userId: undefined,
+        task: undefined,
+        page: 2,
+        pageSize: 10,
+      }),
+    )
   })
 
   it("refreshes the current performance scope while a user filter is active", async () => {
@@ -389,6 +473,8 @@ describe("PerformancePage", () => {
         organizationId: "org-1",
         userId: "user-1",
         task: undefined,
+        page: 1,
+        pageSize: 20,
       }),
     )
     await waitFor(() => expect(screen.getByRole("button", { name: "Rafraîchir" })).toBeEnabled())
@@ -475,6 +561,8 @@ describe("PerformancePage", () => {
       organizationId: "org-1",
       userId: "user-1",
       task: undefined,
+      page: 1,
+      pageSize: 20,
     })
     expect(screen.getByRole("combobox", { name: "Utilisateur" })).toHaveDisplayValue("alice@example.com")
   })
@@ -572,6 +660,17 @@ describe("PerformancePage", () => {
 
     expect(await screen.findByText(/Fenêtre de performance/)).toBeInTheDocument()
     await waitFor(() => expect(fetchPerformanceSummary).toHaveBeenCalledTimes(1))
+
+    const copyButtons = screen.getAllByRole("button", { name: "Copier" })
+    expect(copyButtons).toHaveLength(2)
+    await user.click(copyButtons[0]!)
+    await waitFor(() => expect(execCommand).toHaveBeenCalledTimes(1))
+    expect(JSON.parse(execCommand.mock.calls[0]?.[0] as string)).toMatchObject({
+      eventId: "perf-0",
+      traceId: "trace-0",
+      task: "http_request",
+    })
+    expect(await screen.findByRole("button", { name: "Copié" })).toBeInTheDocument()
 
     const voirButtons = screen.getAllByRole("button", { name: "Voir" })
     expect(voirButtons).toHaveLength(2)

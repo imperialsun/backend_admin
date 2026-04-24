@@ -64,6 +64,8 @@ type PerformanceSummaryInput = {
   organizationId?: string
   userId?: string
   task?: string
+  page?: number
+  pageSize?: number
 }
 
 type DemeterQueueSettingsInput = {
@@ -280,6 +282,12 @@ function buildPerformanceSummaryParams(input: PerformanceSummaryInput) {
   }
   if (input.task?.trim()) {
     params.set("task", input.task.trim())
+  }
+  if (typeof input.page === "number" && input.page > 0) {
+    params.set("page", String(input.page))
+  }
+  if (typeof input.pageSize === "number" && input.pageSize > 0) {
+    params.set("pageSize", String(input.pageSize))
   }
   return params
 }

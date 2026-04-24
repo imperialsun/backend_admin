@@ -187,6 +187,25 @@ describe("BackendErrorsPage", () => {
     expect(screen.getByText("Détail copié dans le presse-papiers.")).toBeInTheDocument()
   })
 
+  it("copies a backend error row as JSON", async () => {
+    const user = userEvent.setup()
+
+    renderWithProviders(<BackendErrorsPage />, {
+      route: "/backend-errors?from=2026-03-01&to=2026-03-31&org=org-1",
+    })
+
+    await screen.findByText("2 événement(s) sur 1 page(s).")
+    await user.click(screen.getAllByRole("button", { name: "Copier" })[0])
+
+    await waitFor(() => expect(execCommand).toHaveBeenCalledTimes(1))
+    expect(JSON.parse(execCommand.mock.calls[0]?.[0] as string)).toMatchObject({
+      id: "event-1",
+      traceId: "trace-alpha",
+      errorMessage: "boom alpha",
+    })
+    expect(await screen.findByRole("button", { name: "Copié" })).toBeInTheDocument()
+  })
+
   it("filters backend errors by user within the selected organization", async () => {
     const user = userEvent.setup()
 

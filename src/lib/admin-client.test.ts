@@ -283,6 +283,8 @@ describe("admin-client", () => {
         organizationId: "org-1",
         userId: "user-1",
         task: "request",
+        page: 2,
+        pageSize: 50,
       }),
     ).resolves.toMatchObject({
       organizationId: "org-1",
@@ -290,7 +292,7 @@ describe("admin-client", () => {
     })
 
     expect(requestJson).toHaveBeenCalledWith(
-      "/admin/performance/summary?from=2026-03-01&to=2026-03-31&organizationId=org-1&userId=user-1&task=request",
+      "/admin/performance/summary?from=2026-03-01&to=2026-03-31&organizationId=org-1&userId=user-1&task=request&page=2&pageSize=50",
     )
   })
 
