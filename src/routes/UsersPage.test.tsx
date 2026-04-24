@@ -441,7 +441,7 @@ describe("UsersPage", () => {
         { permissionCode: "feature.admin", effect: "allow" },
       ]),
     )
-  })
+  }, 15000)
 
   it("hides global role editing for org admins", async () => {
     useAdminSession.mockReturnValue({

@@ -1,6 +1,6 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query"
 import { RefreshCcw, Save, Server, Waves } from "lucide-react"
-import { useEffect, useState, type FormEvent } from "react"
+import { useState, type FormEvent } from "react"
 
 import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
@@ -327,16 +327,8 @@ export default function DemeterQueuePage() {
     refetchIntervalInBackground: true,
   })
 
-  useEffect(() => {
-    const nextParallelism = snapshotQuery.data?.settings.parallelism
-    if (typeof nextParallelism !== "number") {
-      return
-    }
-    if (parallelismDraftFocused) {
-      return
-    }
-    setParallelismDraft(String(nextParallelism))
-  }, [parallelismDraftFocused, snapshotQuery.data?.settings.parallelism])
+  const snapshotParallelism = snapshotQuery.data?.settings.parallelism
+  const parallelismInputValue = parallelismDraftFocused ? parallelismDraft : String(snapshotParallelism ?? 1)
 
   const updateSettingsMutation = useMutation({
     mutationFn: async (parallelism: number) => updateDemeterQueueSettings({ parallelism }),
@@ -460,15 +452,21 @@ export default function DemeterQueuePage() {
                   id="demeter-queue-parallelism"
                   max={MAX_PARALLELISM}
                   min={0}
-                  onBlur={() => setParallelismDraftFocused(false)}
+                  onBlur={() => {
+                    setParallelismDraftFocused(false)
+                    setParallelismDraft(String(snapshotParallelism ?? 1))
+                  }}
                   onChange={(event) => {
                     setParallelismDraft(event.target.value)
                     setParallelismError(null)
                   }}
-                  onFocus={() => setParallelismDraftFocused(true)}
+                  onFocus={() => {
+                    setParallelismDraftFocused(true)
+                    setParallelismDraft(String(snapshotParallelism ?? 1))
+                  }}
                   step={1}
                   type="number"
-                  value={parallelismDraft}
+                  value={parallelismInputValue}
                 />
               </div>
               <Button className="gap-2" disabled={updateSettingsMutation.isPending} type="submit">
