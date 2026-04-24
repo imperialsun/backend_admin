@@ -1,4 +1,4 @@
-import { Activity, Building2, Gauge, Home, TriangleAlert, Users } from "lucide-react"
+import { Activity, Building2, Gauge, Home, Layers3, TriangleAlert, Users } from "lucide-react"
 import { NavLink } from "react-router-dom"
 
 import { Badge } from "@/components/ui/badge"
@@ -11,6 +11,7 @@ const navItems = [
   { to: "/users", label: "Utilisateurs", icon: Users, superAdminOnly: false },
   { to: "/activity", label: "Activité", icon: Activity, superAdminOnly: false },
   { to: "/performance", label: "Performance", icon: Gauge, superAdminOnly: true },
+  { to: "/demeter-queue", label: "Queue Demeter", icon: Layers3, superAdminOnly: true },
   { to: "/backend-errors", label: "Erreurs backend", icon: TriangleAlert, superAdminOnly: true },
 ]
 

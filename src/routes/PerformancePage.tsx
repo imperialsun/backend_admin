@@ -306,6 +306,17 @@ const performanceTaskStepLabels: Record<string, string> = {
   upstream_error_response: "Réponse en erreur",
   transport_error: "Erreur réseau",
   read_error: "Erreur de lecture",
+  enqueue: "Ajout en file",
+  worker_created: "Worker créé",
+  worker_stopped: "Worker arrêté",
+  worker_drain_requested: "Drain demandé",
+  queue_resize_requested: "Resize demandé",
+  queue_resize_applied: "Resize appliqué",
+  job_completed: "Job terminé",
+  job_failed: "Job en erreur",
+  cooldown_started: "Cooldown démarré",
+  upstream_retry: "Retry demandé",
+  upstream_retry_exhausted: "Retry épuisé",
 }
 
 function formatPerformanceTaskStep(step: string) {
@@ -314,6 +325,15 @@ function formatPerformanceTaskStep(step: string) {
 
 const performanceTaskLabels: Record<string, { label: string; detail?: string }> = {
   http_request: { label: "Requête HTTP backend" },
+  demeter_queue_enqueue: { label: "Queue Demeter", detail: "Ajout" },
+  demeter_queue_resize_requested: { label: "Queue Demeter", detail: "Resize demandé" },
+  demeter_queue_resize_applied: { label: "Queue Demeter", detail: "Resize appliqué" },
+  demeter_worker_created: { label: "Worker Demeter", detail: "Création" },
+  demeter_worker_drain_requested: { label: "Worker Demeter", detail: "Drain" },
+  demeter_worker_stopped: { label: "Worker Demeter", detail: "Arrêt" },
+  demeter_worker_job_completed: { label: "Worker Demeter", detail: "Job terminé" },
+  demeter_worker_job_failed: { label: "Worker Demeter", detail: "Job en erreur" },
+  demeter_worker_cooldown_started: { label: "Worker Demeter", detail: "Cooldown" },
   reception_de_slice: { label: "Réception de slice" },
   reconstruction_fichier: { label: "Reconstruction fichier" },
   validation_ffprobe: { label: "Validation ffprobe" },
@@ -334,6 +354,8 @@ const performanceTaskLabels: Record<string, { label: string; detail?: string }> 
   mistral_models: { label: "Client Mistral", detail: "Liste des modèles" },
   mistral_request: { label: "Client Mistral", detail: "Requête générique" },
   mistral_audio_transcription: { label: "Client Mistral", detail: "Transcription audio" },
+  mistral_audio_transcription_retry: { label: "Client Mistral", detail: "Retry transcription" },
+  mistral_audio_transcription_retry_exhausted: { label: "Client Mistral", detail: "Retry épuisé" },
   mistral_report_generation: { label: "Client Mistral", detail: "Génération de CR" },
   mistral_report_cri: { label: "Client Mistral", detail: "CRI" },
   mistral_report_cro: { label: "Client Mistral", detail: "CRO" },
@@ -406,6 +428,35 @@ const performanceTaskHelpSections = [
     ],
   },
   {
+    title: "Queue Demeter",
+    items: [
+      {
+        task: "demeter_queue_enqueue",
+        description: "Ajout d'une transcription dans la file choisie, ou en attente si aucune lane n'est disponible.",
+      },
+      {
+        task: "demeter_queue_resize_requested",
+        description: "Demande de changement du parallélisme des workers Demeter.",
+      },
+      {
+        task: "demeter_queue_resize_applied",
+        description: "Changement de parallélisme appliqué après création ou fermeture des workers.",
+      },
+      {
+        task: "demeter_worker_created",
+        description: "Création d'une lane worker quand la queue a besoin de capacité.",
+      },
+      {
+        task: "demeter_worker_job_completed",
+        description: "Fin normale d'une transcription traitée par une lane.",
+      },
+      {
+        task: "demeter_worker_job_failed",
+        description: "Échec final d'une transcription traitée par une lane.",
+      },
+    ],
+  },
+  {
     title: "Transcription et audio",
     items: [
       {
@@ -455,6 +506,19 @@ const performanceTaskHelpSections = [
       {
         task: "frontend_cloud_preprocess",
         description: "Durée du prétraitement audio côté frontend cloud.",
+      },
+    ],
+  },
+  {
+    title: "Retries Mistral",
+    items: [
+      {
+        task: "mistral_audio_transcription_retry",
+        description: "Retry d'un chunk Mistral sur une réponse retryable, avec la durée de l'appel initial.",
+      },
+      {
+        task: "mistral_audio_transcription_retry_exhausted",
+        description: "Dernière tentative retryable épuisée côté Mistral.",
       },
     ],
   },

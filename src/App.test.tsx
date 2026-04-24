@@ -21,6 +21,7 @@ vi.mock("@/routes/UsersPage", () => ({ default: () => <div>users-page</div> }))
 vi.mock("@/routes/UserSettingsPage", () => ({ default: () => <div>user-settings-page</div> }))
 vi.mock("@/routes/ActivityPage", () => ({ default: () => <div>activity-page</div> }))
 vi.mock("@/routes/PerformancePage", () => ({ default: () => <div>performance-page</div> }))
+vi.mock("@/routes/DemeterQueuePage", () => ({ default: () => <div>demeter-queue-page</div> }))
 vi.mock("@/routes/BackendErrorsPage", () => ({ default: () => <div>backend-errors-page</div> }))
 vi.mock("@/routes/ForbiddenPage", () => ({ default: () => <div>forbidden-page</div> }))
 
@@ -122,6 +123,18 @@ describe("App routes", () => {
     expect(screen.getByText("performance-page")).toBeInTheDocument()
   })
 
+  it("renders the Demeter queue console for super admins", () => {
+    useAdminSession.mockReturnValue(sessionMock())
+
+    render(
+      <MemoryRouter initialEntries={["/demeter-queue"]}>
+        <App />
+      </MemoryRouter>,
+    )
+
+    expect(screen.getByText("demeter-queue-page")).toBeInTheDocument()
+  })
+
   it("redirects non super admin users away from performance", () => {
     useAdminSession.mockReturnValue(sessionMock({ isSuperAdmin: false, globalRoles: ["user"] }))
 
@@ -139,6 +152,18 @@ describe("App routes", () => {
 
     render(
       <MemoryRouter initialEntries={["/backend-errors"]}>
+        <App />
+      </MemoryRouter>,
+    )
+
+    expect(screen.getByText("forbidden-page")).toBeInTheDocument()
+  })
+
+  it("redirects non super admin users away from the Demeter queue", () => {
+    useAdminSession.mockReturnValue(sessionMock({ isSuperAdmin: false, globalRoles: ["user"] }))
+
+    render(
+      <MemoryRouter initialEntries={["/demeter-queue"]}>
         <App />
       </MemoryRouter>,
     )

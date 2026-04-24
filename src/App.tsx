@@ -9,6 +9,7 @@ import ForbiddenPage from "@/routes/ForbiddenPage"
 import ForgotPasswordPage from "@/routes/ForgotPasswordPage"
 import LoginPage from "@/routes/LoginPage"
 import OrganizationsPage from "@/routes/OrganizationsPage"
+import DemeterQueuePage from "@/routes/DemeterQueuePage"
 import PerformancePage from "@/routes/PerformancePage"
 import ResetPasswordPage from "@/routes/ResetPasswordPage"
 import UserSettingsPage from "@/routes/UserSettingsPage"
@@ -83,6 +84,14 @@ export default function App() {
           element={
             <RequireSuperAdmin>
               <PerformancePage />
+            </RequireSuperAdmin>
+          }
+        />
+        <Route
+          path="/demeter-queue"
+          element={
+            <RequireSuperAdmin>
+              <DemeterQueuePage />
             </RequireSuperAdmin>
           }
         />

@@ -133,9 +133,18 @@ describe("PerformancePage", () => {
         "preparation_des_chunks",
         "transcodage_ffmpeg",
         "erreur_backend",
+        "demeter_queue_enqueue",
+        "demeter_queue_resize_requested",
+        "demeter_queue_resize_applied",
+        "demeter_worker_created",
+        "demeter_worker_job_completed",
+        "demeter_worker_job_failed",
+        "demeter_worker_cooldown_started",
         "mistral_models",
         "http_request",
         "mistral_audio_transcription",
+        "mistral_audio_transcription_retry",
+        "mistral_audio_transcription_retry_exhausted",
       ],
       topTasks: [
         {
@@ -229,10 +238,15 @@ describe("PerformancePage", () => {
     expect(taskHelp.parentElement).toBe(document.body)
     expect(taskHelp).toHaveClass("fixed")
     expect(within(taskHelp).getByRole("heading", { name: "Lecture générale" })).toBeInTheDocument()
+    expect(within(taskHelp).getByRole("heading", { name: "Queue Demeter" })).toBeInTheDocument()
     expect(within(taskHelp).getByRole("heading", { name: "Transcription et audio" })).toBeInTheDocument()
+    expect(within(taskHelp).getByRole("heading", { name: "Retries Mistral" })).toBeInTheDocument()
     expect(within(taskHelp).getByRole("heading", { name: "Génération de CR" })).toBeInTheDocument()
     expect(within(taskHelp).getByRole("heading", { name: "Frontend avancé" })).toBeInTheDocument()
     expect(within(taskHelp).getByText("http_request")).toBeInTheDocument()
+    expect(within(taskHelp).getByText("demeter_queue_enqueue")).toBeInTheDocument()
+    expect(within(taskHelp).getByText("demeter_queue_resize_requested")).toBeInTheDocument()
+    expect(within(taskHelp).getByText("demeter_worker_job_failed")).toBeInTheDocument()
     expect(within(taskHelp).getByText("reception_de_slice")).toBeInTheDocument()
     expect(within(taskHelp).getByText("reconstruction_fichier")).toBeInTheDocument()
     expect(within(taskHelp).getByText("validation_ffprobe")).toBeInTheDocument()
@@ -242,6 +256,7 @@ describe("PerformancePage", () => {
     expect(within(taskHelp).getByText("erreur_backend")).toBeInTheDocument()
     expect(within(taskHelp).getByText("mistral_models")).toBeInTheDocument()
     expect(within(taskHelp).getByText("mistral_audio_transcription")).toBeInTheDocument()
+    expect(within(taskHelp).getByText("mistral_audio_transcription_retry")).toBeInTheDocument()
     expect(within(taskHelp).getByText("mistral_report_generation")).toBeInTheDocument()
     expect(within(taskHelp).getByText("mistral_report_cri")).toBeInTheDocument()
 
@@ -255,6 +270,9 @@ describe("PerformancePage", () => {
 
     const taskSelect = await screen.findByLabelText("Tâche")
     expect(screen.getByRole("option", { name: "Client Mistral · Liste des modèles" })).toBeInTheDocument()
+    expect(screen.getByRole("option", { name: "Queue Demeter · Ajout" })).toBeInTheDocument()
+    expect(screen.getByRole("option", { name: "Queue Demeter · Resize demandé" })).toBeInTheDocument()
+    expect(screen.getByRole("option", { name: "Client Mistral · Retry transcription" })).toBeInTheDocument()
     expect(screen.getByRole("option", { name: "Réception de slice" })).toBeInTheDocument()
     expect(screen.getByRole("option", { name: "Validation ffprobe" })).toBeInTheDocument()
     expect(screen.getByRole("option", { name: "Traitement audio" })).toBeInTheDocument()

@@ -6,6 +6,7 @@ import {
 } from "@/lib/admin-session-refresh"
 import type {
   BackendErrorEventsResponse,
+  DemeterQueueSnapshot,
   BulkCreateUsersResponse,
   ActivitySummary,
   AdminSessionPayload,
@@ -63,6 +64,10 @@ type PerformanceSummaryInput = {
   organizationId?: string
   userId?: string
   task?: string
+}
+
+type DemeterQueueSettingsInput = {
+  parallelism: number
 }
 
 function rememberSession(payload: AdminSessionPayload) {
@@ -289,6 +294,22 @@ export async function purgePerformanceEvents(input: PerformanceSummaryInput) {
   const suffix = params.toString()
   return requestNoContent(`/admin/performance${suffix ? `?${suffix}` : ""}`, {
     method: "DELETE",
+  })
+}
+
+export async function fetchDemeterQueueSnapshot(limit = 200) {
+  const params = new URLSearchParams()
+  if (Number.isFinite(limit) && limit > 0) {
+    params.set("limit", String(Math.min(500, Math.trunc(limit))))
+  }
+  const suffix = params.toString()
+  return requestJson<DemeterQueueSnapshot>(`/admin/providers/demeter-sante/queue${suffix ? `?${suffix}` : ""}`)
+}
+
+export async function updateDemeterQueueSettings(input: DemeterQueueSettingsInput) {
+  return requestJson<DemeterQueueSnapshot>("/admin/providers/demeter-sante/queue/settings", {
+    method: "PUT",
+    body: JSON.stringify(input),
   })
 }
 

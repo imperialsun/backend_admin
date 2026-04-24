@@ -217,3 +217,62 @@ export interface PerformanceSummary {
   }>
   recentEvents: PerformanceEvent[]
 }
+
+export interface DemeterQueueSettingsSnapshot {
+  parallelism: number
+  updatedAt: string
+}
+
+export interface DemeterQueueSummarySnapshot {
+  parallelism: number
+  openWorkers: number
+  drainingWorkers: number
+  coolingWorkers: number
+  pendingOperations: number
+  runningOperations: number
+  unassignedOperations: number
+  retryPaused: boolean
+  retryPausedLaneId?: number
+  retryPausedOperationId?: string
+  retryPausedChunkIndex?: number
+  retryPausedSince?: string
+}
+
+export interface DemeterQueueWorkerSnapshot {
+  queueId: number
+  open: boolean
+  draining: boolean
+  workerRunning: boolean
+  cooldownUntil?: string
+  currentOperationId?: string
+  currentStatus?: string
+  currentStage?: string
+  currentChunkIndex?: number
+  currentChunkCount?: number
+  currentProgress?: number
+  load: number
+  pendingCount: number
+  runningCount: number
+  lastError?: string
+}
+
+export interface DemeterQueueOperationSnapshot {
+  operationId: string
+  queueId: number
+  status: string
+  stage: string
+  chunkIndex: number
+  chunkCount: number
+  progress: number
+  statusCode: number
+  createdAt: string
+  updatedAt: string
+  lastError?: string
+}
+
+export interface DemeterQueueSnapshot {
+  settings: DemeterQueueSettingsSnapshot
+  summary: DemeterQueueSummarySnapshot
+  workers: DemeterQueueWorkerSnapshot[]
+  operations: DemeterQueueOperationSnapshot[]
+}
