@@ -8,8 +8,9 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { Table, TableWrapper } from "@/components/ui/table"
-import { fetchDemeterQueueSnapshot, updateDemeterQueueSettings } from "@/lib/admin-client"
+import { adminRefresh, fetchDemeterQueueSnapshot, updateDemeterQueueSettings } from "@/lib/admin-client"
 import type { DemeterQueueOperationSnapshot, DemeterQueueSummarySnapshot, DemeterQueueWorkerSnapshot } from "@/lib/types"
+import { useDemeterQueueWebSocket } from "@/lib/use-demeter-queue-websocket"
 import { formatDateTime } from "@/lib/utils"
 
 const QUEUE_SNAPSHOT_LIMIT = 500
@@ -446,14 +447,23 @@ function CompactOperationRow({ operation }: { operation: DemeterQueueOperationSn
 
 export default function DemeterQueuePage() {
   const queryClient = useQueryClient()
+  const queueQueryKey = ["demeter-queue", QUEUE_SNAPSHOT_LIMIT] as const
   const [parallelismDraft, setParallelismDraft] = useState("1")
   const [parallelismDraftFocused, setParallelismDraftFocused] = useState(false)
   const [parallelismError, setParallelismError] = useState<string | null>(null)
 
+  const queueWebSocket = useDemeterQueueWebSocket({
+    limit: QUEUE_SNAPSHOT_LIMIT,
+    refreshSession: adminRefresh,
+    onSnapshot: (snapshot) => {
+      queryClient.setQueryData(queueQueryKey, snapshot)
+    },
+  })
+
   const snapshotQuery = useQuery({
-    queryKey: ["demeter-queue", QUEUE_SNAPSHOT_LIMIT],
+    queryKey: queueQueryKey,
     queryFn: () => fetchDemeterQueueSnapshot(QUEUE_SNAPSHOT_LIMIT),
-    refetchInterval: 2000,
+    refetchInterval: queueWebSocket.isAuthenticated || queueWebSocket.mode === "websocket_auth" ? false : 2000,
     refetchIntervalInBackground: true,
   })
 
@@ -461,9 +471,14 @@ export default function DemeterQueuePage() {
   const parallelismInputValue = parallelismDraftFocused ? parallelismDraft : String(snapshotParallelism ?? 1)
 
   const updateSettingsMutation = useMutation({
-    mutationFn: async (parallelism: number) => updateDemeterQueueSettings({ parallelism }),
+    mutationFn: async (parallelism: number) => {
+      if (queueWebSocket.isAuthenticated) {
+        return queueWebSocket.updateSettings({ parallelism })
+      }
+      return updateDemeterQueueSettings({ parallelism })
+    },
     onSuccess: (snapshot) => {
-      queryClient.setQueryData(["demeter-queue", QUEUE_SNAPSHOT_LIMIT], snapshot)
+      queryClient.setQueryData(queueQueryKey, snapshot)
       setParallelismDraft(String(snapshot.settings.parallelism))
       setParallelismError(null)
     },
@@ -524,6 +539,13 @@ export default function DemeterQueuePage() {
     updateSettingsMutation.mutate(parsed)
   }
 
+  const liveModeLabel =
+    queueWebSocket.mode === "websocket"
+      ? "WebSocket"
+      : queueWebSocket.mode === "websocket_auth"
+        ? "WebSocket auth"
+        : "Polling"
+
   return (
     <div className="space-y-6">
       <Card className="overflow-hidden border-0 bg-gradient-to-br from-slate-950 via-slate-900 to-slate-800 text-white shadow-2xl">
@@ -536,6 +558,7 @@ export default function DemeterQueuePage() {
                 <Badge className="border border-white/15 bg-white/10 text-white">
                   {snapshotQuery.isFetching ? "Synchronisation" : "Snapshot live"}
                 </Badge>
+                <Badge className="border border-white/15 bg-white/10 text-white">{liveModeLabel}</Badge>
               </div>
               <CardTitle className="text-3xl leading-tight">Lane worker queue</CardTitle>
               <CardDescription className="max-w-2xl text-slate-300">
@@ -585,7 +608,6 @@ export default function DemeterQueuePage() {
                   min={0}
                   onBlur={() => {
                     setParallelismDraftFocused(false)
-                    setParallelismDraft(String(snapshotParallelism ?? 1))
                   }}
                   onChange={(event) => {
                     setParallelismDraft(event.target.value)
