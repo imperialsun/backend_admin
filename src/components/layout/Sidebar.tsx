@@ -12,6 +12,7 @@ const navItems = [
   { to: "/activity", label: "Activité", icon: Activity, superAdminOnly: false },
   { to: "/performance", label: "Performance", icon: Gauge, superAdminOnly: true },
   { to: "/demeter-queue", label: "Queue Demeter", icon: Layers3, superAdminOnly: true },
+  { to: "/report-queue", label: "Queue Rapport", icon: Layers3, superAdminOnly: true },
   { to: "/backend-errors", label: "Erreurs backend", icon: TriangleAlert, superAdminOnly: true },
 ]
 

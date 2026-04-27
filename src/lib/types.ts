@@ -282,3 +282,68 @@ export interface DemeterQueueSnapshot {
   operations: DemeterQueueOperationSnapshot[]
   allOperations: DemeterQueueOperationSnapshot[]
 }
+
+export interface DemeterReportQueueSettingsSnapshot {
+  parallelism: number
+  updatedAt: string
+}
+
+export interface DemeterReportQueueSummarySnapshot {
+  parallelism: number
+  openWorkers: number
+  drainingWorkers: number
+  coolingWorkers: number
+  pendingOperations: number
+  runningOperations: number
+  unassignedOperations: number
+  retryPaused: boolean
+  retryPausedLaneId?: number
+  retryPausedOperationId?: string
+  retryPausedFormatIndex?: number
+  retryPausedSince?: string
+}
+
+export interface DemeterReportQueueWorkerSnapshot {
+  queueId: number
+  open: boolean
+  draining: boolean
+  workerRunning: boolean
+  cooldownUntil?: string
+  currentOperationId?: string
+  currentStatus?: string
+  currentStage?: string
+  currentFormatIndex?: number
+  currentFormatCount?: number
+  currentProgress?: number
+  load: number
+  pendingCount: number
+  runningCount: number
+  lastError?: string
+}
+
+export interface DemeterReportQueueOperationSnapshot {
+  operationId: string
+  organizationId?: string
+  userId?: string
+  queueId: number
+  status: string
+  stage: string
+  formatIndex: number
+  formatCount: number
+  progress: number
+  statusCode: number
+  createdAt: string
+  updatedAt: string
+  finishedAt?: string
+  queuePayloadJson?: string
+  responseJson?: string
+  lastError?: string
+}
+
+export interface DemeterReportQueueSnapshot {
+  settings: DemeterReportQueueSettingsSnapshot
+  summary: DemeterReportQueueSummarySnapshot
+  workers: DemeterReportQueueWorkerSnapshot[]
+  operations: DemeterReportQueueOperationSnapshot[]
+  allOperations: DemeterReportQueueOperationSnapshot[]
+}

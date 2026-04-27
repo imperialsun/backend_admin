@@ -7,6 +7,7 @@ import {
 import type {
   BackendErrorEventsResponse,
   DemeterQueueSnapshot,
+  DemeterReportQueueSnapshot,
   BulkCreateUsersResponse,
   ActivitySummary,
   AdminSessionPayload,
@@ -316,6 +317,24 @@ export async function fetchDemeterQueueSnapshot(limit = 200) {
 
 export async function updateDemeterQueueSettings(input: DemeterQueueSettingsInput) {
   return requestJson<DemeterQueueSnapshot>("/admin/providers/demeter-sante/queue/settings", {
+    method: "PUT",
+    body: JSON.stringify(input),
+  })
+}
+
+export async function fetchDemeterReportQueueSnapshot(limit = 200) {
+  const params = new URLSearchParams()
+  if (Number.isFinite(limit) && limit > 0) {
+    params.set("limit", String(Math.min(500, Math.trunc(limit))))
+  }
+  const suffix = params.toString()
+  return requestJson<DemeterReportQueueSnapshot>(
+    `/admin/providers/demeter-sante/report-queue${suffix ? `?${suffix}` : ""}`,
+  )
+}
+
+export async function updateDemeterReportQueueSettings(input: DemeterQueueSettingsInput) {
+  return requestJson<DemeterReportQueueSnapshot>("/admin/providers/demeter-sante/report-queue/settings", {
     method: "PUT",
     body: JSON.stringify(input),
   })

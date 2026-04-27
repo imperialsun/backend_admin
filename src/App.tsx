@@ -10,6 +10,7 @@ import ForgotPasswordPage from "@/routes/ForgotPasswordPage"
 import LoginPage from "@/routes/LoginPage"
 import OrganizationsPage from "@/routes/OrganizationsPage"
 import DemeterQueuePage from "@/routes/DemeterQueuePage"
+import ReportQueuePage from "@/routes/ReportQueuePage"
 import PerformancePage from "@/routes/PerformancePage"
 import ResetPasswordPage from "@/routes/ResetPasswordPage"
 import UserSettingsPage from "@/routes/UserSettingsPage"
@@ -92,6 +93,14 @@ export default function App() {
           element={
             <RequireSuperAdmin>
               <DemeterQueuePage />
+            </RequireSuperAdmin>
+          }
+        />
+        <Route
+          path="/report-queue"
+          element={
+            <RequireSuperAdmin>
+              <ReportQueuePage />
             </RequireSuperAdmin>
           }
         />

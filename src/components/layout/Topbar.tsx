@@ -10,6 +10,7 @@ const titles: Record<string, { title: string; subtitle: string }> = {
   "/users": { title: "Utilisateurs & droits", subtitle: "Gestion des comptes, des rôles et des overrides de permissions." },
   "/activity": { title: "Activité", subtitle: "Analyse de l’usage par période, utilisateur et provider." },
   "/performance": { title: "Performance", subtitle: "Timings backend et frontend, visibles uniquement par les super admin." },
+  "/report-queue": { title: "Queue Rapport", subtitle: "Suivi des opérations CR asynchrones avec contrôle du parallélisme." },
   "/backend-errors": { title: "Console d’erreurs", subtitle: "Historique persistant des erreurs backend, avec filtre et purge." },
 }
 

@@ -51,6 +51,7 @@ describe("Sidebar", () => {
     expect(screen.getByText("Admin Panel")).toBeInTheDocument()
     expect(screen.getByRole("link", { name: "Performance" })).toHaveAttribute("href", "/performance")
     expect(screen.getByRole("link", { name: "Queue Demeter" })).toHaveAttribute("href", "/demeter-queue")
+    expect(screen.getByRole("link", { name: "Queue Rapport" })).toHaveAttribute("href", "/report-queue")
     expect(screen.getByRole("link", { name: "Erreurs backend" })).toHaveAttribute("href", "/backend-errors")
   })
 
@@ -63,6 +64,7 @@ describe("Sidebar", () => {
 
     expect(screen.queryByRole("link", { name: "Performance" })).not.toBeInTheDocument()
     expect(screen.queryByRole("link", { name: "Queue Demeter" })).not.toBeInTheDocument()
+    expect(screen.queryByRole("link", { name: "Queue Rapport" })).not.toBeInTheDocument()
     expect(screen.queryByRole("link", { name: "Erreurs backend" })).not.toBeInTheDocument()
   })
 })
