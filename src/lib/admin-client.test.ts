@@ -44,6 +44,8 @@ import {
   fetchUserActivitySummary,
   purgePerformanceEvents,
   purgeBackendErrorEvents,
+  purgeDemeterQueueOperations,
+  purgeDemeterReportQueueOperations,
   sendUserPasswordResetEmail,
 } from "@/lib/admin-client"
 
@@ -332,6 +334,50 @@ describe("admin-client", () => {
 
     expect(requestNoContent).toHaveBeenCalledWith(
       "/admin/performance?from=2026-03-01&to=2026-03-31&organizationId=org-1&userId=user-1&task=request",
+      expect.objectContaining({ method: "DELETE" }),
+    )
+  })
+
+  it("purges demeter queue completed jobs through the admin namespace", async () => {
+    requestNoContent.mockResolvedValue(undefined)
+
+    await expect(purgeDemeterQueueOperations()).resolves.toBeUndefined()
+
+    expect(requestNoContent).toHaveBeenCalledWith(
+      "/admin/providers/demeter-sante/queue",
+      expect.objectContaining({ method: "DELETE" }),
+    )
+  })
+
+  it("purges the full demeter queue table through the admin namespace", async () => {
+    requestNoContent.mockResolvedValue(undefined)
+
+    await expect(purgeDemeterQueueOperations("all")).resolves.toBeUndefined()
+
+    expect(requestNoContent).toHaveBeenCalledWith(
+      "/admin/providers/demeter-sante/queue?scope=all",
+      expect.objectContaining({ method: "DELETE" }),
+    )
+  })
+
+  it("purges demeter report queue completed jobs through the admin namespace", async () => {
+    requestNoContent.mockResolvedValue(undefined)
+
+    await expect(purgeDemeterReportQueueOperations()).resolves.toBeUndefined()
+
+    expect(requestNoContent).toHaveBeenCalledWith(
+      "/admin/providers/demeter-sante/report-queue",
+      expect.objectContaining({ method: "DELETE" }),
+    )
+  })
+
+  it("purges the full demeter report queue table through the admin namespace", async () => {
+    requestNoContent.mockResolvedValue(undefined)
+
+    await expect(purgeDemeterReportQueueOperations("all")).resolves.toBeUndefined()
+
+    expect(requestNoContent).toHaveBeenCalledWith(
+      "/admin/providers/demeter-sante/report-queue?scope=all",
       expect.objectContaining({ method: "DELETE" }),
     )
   })

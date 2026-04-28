@@ -1,5 +1,5 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query"
-import { ChevronDown, ChevronRight, FileText, RefreshCcw, Save, Server, Waves } from "lucide-react"
+import { ChevronDown, ChevronRight, FileText, RefreshCcw, Save, Server, Trash2, Waves } from "lucide-react"
 import { useState, type FormEvent } from "react"
 
 import { Badge } from "@/components/ui/badge"
@@ -8,13 +8,15 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { Table, TableWrapper } from "@/components/ui/table"
-import { adminRefresh, fetchDemeterQueueSnapshot, updateDemeterQueueSettings } from "@/lib/admin-client"
+import { adminRefresh, fetchDemeterQueueSnapshot, purgeDemeterQueueOperations, updateDemeterQueueSettings } from "@/lib/admin-client"
 import type { DemeterQueueOperationSnapshot, DemeterQueueSummarySnapshot, DemeterQueueWorkerSnapshot } from "@/lib/types"
 import { useDemeterQueueWebSocket } from "@/lib/use-demeter-queue-websocket"
 import { formatDateTime } from "@/lib/utils"
 
 const QUEUE_SNAPSHOT_LIMIT = 500
 const MAX_PARALLELISM = 8
+
+type QueuePurgeScope = "completed" | "all"
 
 function StatCard({ label, value, helper }: { label: string; value: string | number; helper: string }) {
   return (
@@ -451,6 +453,10 @@ export default function DemeterQueuePage() {
   const [parallelismDraft, setParallelismDraft] = useState("1")
   const [parallelismDraftFocused, setParallelismDraftFocused] = useState(false)
   const [parallelismError, setParallelismError] = useState<string | null>(null)
+  const [purgeCompletedConfirmationOpen, setPurgeCompletedConfirmationOpen] = useState(false)
+  const [purgeAllConfirmationOpen, setPurgeAllConfirmationOpen] = useState(false)
+  const [purgeError, setPurgeError] = useState<string | null>(null)
+  const [purgeSuccess, setPurgeSuccess] = useState<string | null>(null)
 
   const queueWebSocket = useDemeterQueueWebSocket({
     limit: QUEUE_SNAPSHOT_LIMIT,
@@ -484,6 +490,26 @@ export default function DemeterQueuePage() {
     },
     onError: (error) => {
       setParallelismError(error instanceof Error ? error.message : "Impossible de mettre à jour la file Demeter")
+    },
+  })
+
+  const purgeMutation = useMutation({
+    mutationFn: async (scope: QueuePurgeScope) => {
+      return purgeDemeterQueueOperations(scope)
+    },
+    onMutate: () => {
+      setPurgeError(null)
+      setPurgeSuccess(null)
+    },
+    onSuccess: async (_snapshot, scope) => {
+      setPurgeCompletedConfirmationOpen(false)
+      setPurgeAllConfirmationOpen(false)
+      setPurgeSuccess(scope === "all" ? "Toute la table a été vidée." : "Les jobs terminés ont été supprimés.")
+      await queryClient.invalidateQueries({ queryKey: queueQueryKey })
+    },
+    onError: (error) => {
+      setPurgeSuccess(null)
+      setPurgeError(error instanceof Error ? error.message : "Impossible de purger la queue Demeter")
     },
   })
 
@@ -672,6 +698,94 @@ export default function DemeterQueuePage() {
           </CardContent>
         </Card>
       </div>
+
+      <Card className="border-rose-500/20 bg-gradient-to-br from-rose-500/5 via-background to-amber-500/5">
+        <CardHeader>
+          <CardTitle className="flex items-center gap-2">
+            <Trash2 className="h-4 w-4" />
+            Purge de la queue
+          </CardTitle>
+          <CardDescription>
+            Deux options sont disponibles: supprimer uniquement les jobs terminés, ou vider toute la table y compris
+            les jobs en cours et en attente.
+          </CardDescription>
+        </CardHeader>
+        <CardContent className="space-y-4">
+          {purgeError ? <p className="text-sm text-rose-700">{purgeError}</p> : null}
+          {purgeSuccess ? <p className="text-sm text-emerald-700">{purgeSuccess}</p> : null}
+          <div className="grid gap-4 lg:grid-cols-2">
+            <div className="rounded-3xl border border-border/70 bg-background/80 p-4">
+              <div className="space-y-2">
+                <p className="font-semibold">Vider les jobs terminés</p>
+                <p className="text-sm text-muted-foreground">
+                  Supprime uniquement les opérations déjà finalisées et conserve les jobs en cours.
+                </p>
+              </div>
+              {purgeCompletedConfirmationOpen ? (
+                <div className="mt-4 rounded-2xl border border-rose-500/20 bg-rose-500/5 p-4">
+                  <p className="font-semibold">Confirmer la purge des jobs terminés ?</p>
+                  <p className="mt-1 text-sm text-muted-foreground">Cette action ne touche pas les jobs encore actifs.</p>
+                  <div className="mt-4 flex flex-wrap gap-2">
+                    <Button variant="secondary" onClick={() => setPurgeCompletedConfirmationOpen(false)}>
+                      Annuler
+                    </Button>
+                    <Button
+                      className="gap-2"
+                      disabled={purgeMutation.isPending}
+                      onClick={() => purgeMutation.mutate("completed")}
+                      variant="danger"
+                    >
+                      <Trash2 className="h-4 w-4" />
+                      {purgeMutation.isPending ? "Purge..." : "Confirmer"}
+                    </Button>
+                  </div>
+                </div>
+              ) : (
+                <Button className="mt-4 gap-2" onClick={() => setPurgeCompletedConfirmationOpen(true)} variant="danger">
+                  <Trash2 className="h-4 w-4" />
+                  Vider les jobs terminés
+                </Button>
+              )}
+            </div>
+
+            <div className="rounded-3xl border border-border/70 bg-background/80 p-4">
+              <div className="space-y-2">
+                <p className="font-semibold">Vider toute la table</p>
+                <p className="text-sm text-muted-foreground">
+                  Supprime tous les enregistrements de queue, y compris les jobs en attente et en cours.
+                </p>
+              </div>
+              {purgeAllConfirmationOpen ? (
+                <div className="mt-4 rounded-2xl border border-rose-500/20 bg-rose-500/5 p-4">
+                  <p className="font-semibold">Confirmer la purge complète ?</p>
+                  <p className="mt-1 text-sm text-muted-foreground">
+                    Cette action vide entièrement la table, y compris les jobs encore actifs.
+                  </p>
+                  <div className="mt-4 flex flex-wrap gap-2">
+                    <Button variant="secondary" onClick={() => setPurgeAllConfirmationOpen(false)}>
+                      Annuler
+                    </Button>
+                    <Button
+                      className="gap-2"
+                      disabled={purgeMutation.isPending}
+                      onClick={() => purgeMutation.mutate("all")}
+                      variant="danger"
+                    >
+                      <Trash2 className="h-4 w-4" />
+                      {purgeMutation.isPending ? "Purge..." : "Confirmer"}
+                    </Button>
+                  </div>
+                </div>
+              ) : (
+                <Button className="mt-4 gap-2" onClick={() => setPurgeAllConfirmationOpen(true)} variant="danger">
+                  <Trash2 className="h-4 w-4" />
+                  Vider toute la table
+                </Button>
+              )}
+            </div>
+          </div>
+        </CardContent>
+      </Card>
 
       <section className="space-y-4">
         <div className="flex items-center gap-3">

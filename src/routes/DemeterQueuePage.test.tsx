@@ -5,12 +5,14 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest"
 const adminClientMocks = vi.hoisted(() => ({
   adminRefresh: vi.fn(),
   fetchDemeterQueueSnapshot: vi.fn(),
+  purgeDemeterQueueOperations: vi.fn(),
   updateDemeterQueueSettings: vi.fn(),
 }))
 
 vi.mock("@/lib/admin-client", () => ({
   adminRefresh: adminClientMocks.adminRefresh,
   fetchDemeterQueueSnapshot: adminClientMocks.fetchDemeterQueueSnapshot,
+  purgeDemeterQueueOperations: adminClientMocks.purgeDemeterQueueOperations,
   updateDemeterQueueSettings: adminClientMocks.updateDemeterQueueSettings,
 }))
 
@@ -18,7 +20,7 @@ import DemeterQueuePage from "@/routes/DemeterQueuePage"
 import { clearAdminCsrfToken, setAdminCsrfToken } from "@/lib/admin-security"
 import { renderWithProviders } from "@/test/test-utils"
 
-const { adminRefresh, fetchDemeterQueueSnapshot, updateDemeterQueueSettings } = adminClientMocks
+const { adminRefresh, fetchDemeterQueueSnapshot, purgeDemeterQueueOperations, updateDemeterQueueSettings } = adminClientMocks
 
 class MockWebSocket {
   static CONNECTING = 0
@@ -194,6 +196,7 @@ describe("DemeterQueuePage", () => {
     vi.stubGlobal("WebSocket", MockWebSocket)
     adminRefresh.mockReset()
     fetchDemeterQueueSnapshot.mockReset()
+    purgeDemeterQueueOperations.mockReset()
     updateDemeterQueueSettings.mockReset()
     clearAdminCsrfToken()
   })
@@ -330,5 +333,29 @@ describe("DemeterQueuePage", () => {
 
     await waitFor(() => expect(adminRefresh).toHaveBeenCalled())
     await waitFor(() => expect(MockWebSocket.instances.length).toBeGreaterThan(1))
+  })
+
+  it("exposes both purge scopes through confirmation panels", async () => {
+    const user = userEvent.setup()
+    fetchDemeterQueueSnapshot.mockResolvedValue(baseSnapshot)
+    purgeDemeterQueueOperations.mockResolvedValue(undefined)
+
+    renderWithProviders(<DemeterQueuePage />, { route: "/demeter-queue" })
+
+    expect(await screen.findByText("Purge de la queue")).toBeInTheDocument()
+
+    await user.click(screen.getByRole("button", { name: "Vider les jobs terminés" }))
+    expect(await screen.findByText("Confirmer la purge des jobs terminés ?")).toBeInTheDocument()
+
+    await user.click(screen.getByRole("button", { name: "Confirmer" }))
+    expect(purgeDemeterQueueOperations).toHaveBeenCalledWith("completed")
+    expect(await screen.findByText("Les jobs terminés ont été supprimés.")).toBeInTheDocument()
+
+    await user.click(screen.getByRole("button", { name: "Vider toute la table" }))
+    expect(await screen.findByText("Confirmer la purge complète ?")).toBeInTheDocument()
+
+    await user.click(screen.getByRole("button", { name: "Confirmer" }))
+    expect(purgeDemeterQueueOperations).toHaveBeenCalledWith("all")
+    expect(await screen.findByText("Toute la table a été vidée.")).toBeInTheDocument()
   })
 })

@@ -73,6 +73,8 @@ type DemeterQueueSettingsInput = {
   parallelism: number
 }
 
+type DemeterQueuePurgeScope = "completed" | "all"
+
 function rememberSession(payload: AdminSessionPayload) {
   setAdminCsrfToken(payload.csrfToken)
   publishAdminSessionState(payload)
@@ -322,6 +324,13 @@ export async function updateDemeterQueueSettings(input: DemeterQueueSettingsInpu
   })
 }
 
+export async function purgeDemeterQueueOperations(scope: DemeterQueuePurgeScope = "completed") {
+  const suffix = scope === "all" ? "?scope=all" : ""
+  return requestNoContent(`/admin/providers/demeter-sante/queue${suffix}`, {
+    method: "DELETE",
+  })
+}
+
 export async function fetchDemeterReportQueueSnapshot(limit = 200) {
   const params = new URLSearchParams()
   if (Number.isFinite(limit) && limit > 0) {
@@ -337,6 +346,13 @@ export async function updateDemeterReportQueueSettings(input: DemeterQueueSettin
   return requestJson<DemeterReportQueueSnapshot>("/admin/providers/demeter-sante/report-queue/settings", {
     method: "PUT",
     body: JSON.stringify(input),
+  })
+}
+
+export async function purgeDemeterReportQueueOperations(scope: DemeterQueuePurgeScope = "completed") {
+  const suffix = scope === "all" ? "?scope=all" : ""
+  return requestNoContent(`/admin/providers/demeter-sante/report-queue${suffix}`, {
+    method: "DELETE",
   })
 }
 
