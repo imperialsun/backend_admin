@@ -5,7 +5,7 @@ Demeter Admin Panel is a standalone React SPA for Demeter operators. This reposi
 ## Stack
 
 - React 19
-- Vite 7
+- Vite 8
 - TypeScript
 - Tailwind CSS 4
 - React Router 7
@@ -66,7 +66,9 @@ The current SPA ships:
 - global and organization role assignment,
 - permission override editing,
 - password reset,
-- activity analytics by date range, user, mode, and provider.
+- activity analytics by date range, user, mode, and provider,
+- performance and backend-error observability for super admins,
+- Demeter audio and report queue consoles with WebSocket live updates and polling fallback.
 
 ## Runtime configuration
 

@@ -22,10 +22,10 @@ Demeter Admin Panel est une SPA React/TypeScript organisee en couches:
 | Session | `src/lib/admin-session-context.tsx` | demarre la session et la maintient synchronisee avec les refresh automatiques |
 | Hook session | `src/lib/use-admin-session.ts` | point d acces unique pour les composants |
 | HTTP bas niveau | `src/lib/admin-api.ts` | `credentials: include`, JSON, erreurs typees, injection CSRF, retry transparent sur `401` |
-| Client type | `src/lib/admin-client.ts` | endpoints admin auth, organisations, users, catalogues, activite |
-| Types | `src/lib/types.ts` | contrats session, users, organisations, roles, permissions, activite |
+| Client type | `src/lib/admin-client.ts` | endpoints admin auth, organisations, users, catalogues, activite, performance, queues, erreurs backend |
+| Types | `src/lib/types.ts` | contrats session, users, organisations, roles, permissions, activite, queue, performance |
 | Layout | `src/components/layout/*` | shell admin, navigation, topbar |
-| Pages | `src/routes/*` | login, dashboard, organisations, users, activite, forbidden |
+| Pages | `src/routes/*` | login, dashboard, organisations, users, activite, performance, queues, erreurs backend, forbidden |
 
 ## Diagramme: bootstrap et session
 
@@ -54,15 +54,20 @@ Routes principales:
 - `/organizations`: gestion des organisations, reservee au super admin,
 - `/users`: gestion des comptes, roles et overrides,
 - `/activity`: analyse detaillee de l activite,
+- `/performance`: evenements performance backend/frontend, reserve au super admin,
+- `/demeter-queue`: queue transcription audio Demeter, reservee au super admin,
+- `/report-queue`: queue generation rapport Demeter, reservee au super admin,
+- `/backend-errors`: evenements d erreur backend, reserve au super admin,
 - `/forbidden`: ecran acces refuse.
 
-`RequireAuth` protege toutes les routes hors login. `RequireSuperAdmin` bloque explicitement `/organizations`.
+`RequireAuth` protege toutes les routes hors login. `RequireSuperAdmin` bloque explicitement `/organizations`, `/performance`, `/demeter-queue`, `/report-queue` et `/backend-errors`.
 
 ## Etat et flux de donnees
 
 - Le contexte session est gere par `AdminSessionProvider`.
 - Les donnees serveur sont chargees via TanStack React Query.
 - Toute requete admin qui passe par `adminFetch` peut tenter un refresh transparent une fois sur `401`.
+- Les pages de queue preferent les WebSockets authentifies pour les snapshots live et retombent sur du polling quand l auth WebSocket n est pas disponible.
 - Les formulaires restent en `useState` local.
 - Il n y a pas de store persistant applicatif dans ce repo.
 
@@ -76,6 +81,7 @@ Parametres React Query globaux:
 - `DashboardPage` garde ses filtres date / organisation en etat local.
 - `ActivityPage` encode `from`, `to`, `org` dans l URL.
 - `UsersPage` encode `org`, `q`, `user` dans l URL pour conserver le contexte operateur.
+- `PerformancePage` et `BackendErrorsPage` encodent date, filtres et pagination dans l URL.
 
 ## Config runtime
 

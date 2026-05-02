@@ -317,6 +317,8 @@ export async function fetchDemeterQueueSnapshot(limit = 200) {
   return requestJson<DemeterQueueSnapshot>(`/admin/providers/demeter-sante/queue${suffix ? `?${suffix}` : ""}`)
 }
 
+// The audio and report queues are intentionally separate backend resources:
+// changing one parallelism setting must not resize the other lane pool.
 export async function updateDemeterQueueSettings(input: DemeterQueueSettingsInput) {
   return requestJson<DemeterQueueSnapshot>("/admin/providers/demeter-sante/queue/settings", {
     method: "PUT",

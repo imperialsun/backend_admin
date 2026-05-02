@@ -9,7 +9,7 @@ Cette documentation decrit le fonctionnement complet de Demeter Admin Panel pour
 - exploitation / securite.
 
 Pour les ecrans metier principaux, commencer par:
-[`authentication-session.md`](authentication-session.md), [`organizations.md`](organizations.md), [`users-access.md`](users-access.md), [`activity-analytics.md`](activity-analytics.md).
+[`authentication-session.md`](authentication-session.md), [`organizations.md`](organizations.md), [`users-access.md`](users-access.md), [`activity-analytics.md`](activity-analytics.md), puis les sections queues, performance et erreurs backend dans [`architecture.md`](architecture.md).
 
 ## Parcours recommandes
 
@@ -20,7 +20,8 @@ Pour les ecrans metier principaux, commencer par:
 3. [`organizations.md`](organizations.md)
 4. [`users-access.md`](users-access.md)
 5. [`activity-analytics.md`](activity-analytics.md)
-6. [`troubleshooting.md`](troubleshooting.md)
+6. Ecrans queues, performance et erreurs backend dans [`architecture.md`](architecture.md)
+7. [`troubleshooting.md`](troubleshooting.md)
 
 ### Parcours contributeur technique
 

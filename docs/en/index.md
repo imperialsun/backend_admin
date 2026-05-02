@@ -9,7 +9,7 @@ This documentation describes the full Demeter Admin Panel behavior for three aud
 - operations / security teams.
 
 For the main business screens, start with:
-[`authentication-session.md`](authentication-session.md), [`organizations.md`](organizations.md), [`users-access.md`](users-access.md), [`activity-analytics.md`](activity-analytics.md).
+[`authentication-session.md`](authentication-session.md), [`organizations.md`](organizations.md), [`users-access.md`](users-access.md), [`activity-analytics.md`](activity-analytics.md), then the queue, performance, and backend-error sections in [`architecture.md`](architecture.md).
 
 ## Recommended paths
 
@@ -20,7 +20,8 @@ For the main business screens, start with:
 3. [`organizations.md`](organizations.md)
 4. [`users-access.md`](users-access.md)
 5. [`activity-analytics.md`](activity-analytics.md)
-6. [`troubleshooting.md`](troubleshooting.md)
+6. Queue, performance, and backend-error screens in [`architecture.md`](architecture.md)
+7. [`troubleshooting.md`](troubleshooting.md)
 
 ### Contributor path
 
