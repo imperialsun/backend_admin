@@ -15,6 +15,9 @@ import type {
   PermissionCatalogItem,
   PermissionOverride,
   PerformanceSummary,
+  OrganizationReportTemplate,
+  ReportTemplateDraftOperationResponse,
+  ReportTemplateBaseFormat,
   RolesCatalog,
   User,
   UserActivitySummary,
@@ -74,6 +77,22 @@ type DemeterQueueSettingsInput = {
 }
 
 type DemeterQueuePurgeScope = "completed" | "all"
+
+export type ReportTemplateInput = {
+  name: string
+  description: string
+  baseFormat: ReportTemplateBaseFormat
+  instructions: string
+  exampleOutline: string
+  orgEnabled: boolean
+}
+
+export type ReportTemplateDraftOperationInput = {
+  draftBrief: string
+  baseFormatHint?: ReportTemplateBaseFormat | ""
+  tone?: string
+  requiredSections?: string[]
+}
 
 function rememberSession(payload: AdminSessionPayload) {
   setAdminCsrfToken(payload.csrfToken)
@@ -251,6 +270,35 @@ export async function resetUserSettings(userId: string) {
   return requestJson<UserSettingsEnvelope>(`/admin/users/${userId}/settings/reset`, {
     method: "POST",
   })
+}
+
+export async function fetchOrganizationReportTemplates(organizationId: string) {
+  return requestJson<OrganizationReportTemplate[]>(`/admin/organizations/${organizationId}/report-templates`)
+}
+
+export async function createOrganizationReportTemplate(organizationId: string, input: ReportTemplateInput) {
+  return requestJson<OrganizationReportTemplate>(`/admin/organizations/${organizationId}/report-templates`, {
+    method: "POST",
+    body: JSON.stringify(input),
+  })
+}
+
+export async function updateOrganizationReportTemplate(organizationId: string, templateId: string, input: ReportTemplateInput) {
+  return requestJson<OrganizationReportTemplate>(`/admin/organizations/${organizationId}/report-templates/${templateId}`, {
+    method: "PATCH",
+    body: JSON.stringify(input),
+  })
+}
+
+export async function createReportTemplateDraftOperation(organizationId: string, input: ReportTemplateDraftOperationInput) {
+  return requestJson<ReportTemplateDraftOperationResponse>(`/admin/organizations/${organizationId}/report-templates/draft-operations`, {
+    method: "POST",
+    body: JSON.stringify(input),
+  })
+}
+
+export async function fetchReportTemplateDraftOperation(operationId: string) {
+  return requestJson<ReportTemplateDraftOperationResponse>(`/admin/report-template-draft-operations/${operationId}`)
 }
 
 export async function fetchRolesCatalog() {

@@ -92,6 +92,51 @@ export interface UserSettingsEnvelope {
   settings: Record<string, unknown>
 }
 
+export type ReportTemplateBaseFormat = "CRI" | "CRO" | "CRS" | "CRN"
+
+export interface OrganizationReportTemplate {
+  id: string
+  organizationId: string
+  name: string
+  description: string
+  baseFormat: ReportTemplateBaseFormat
+  instructions: string
+  exampleOutline: string
+  orgEnabled: boolean
+  createdByUserId?: string
+  updatedByUserId?: string
+  createdAt: string
+  updatedAt: string
+}
+
+export interface ReportTemplateDraft {
+  name: string
+  description: string
+  baseFormat: ReportTemplateBaseFormat
+  instructions: string
+  exampleOutline: string
+}
+
+export interface ReportTemplateDraftOperationResponse {
+  operationId: string
+  status: string
+  statusCode: number
+  stage: string
+  formatIndex: number
+  formatCount: number
+  progress: number
+  lastError?: string
+  updatedAt?: string
+  finishedAt?: string
+  response?: {
+    kind: "report_template_draft"
+    draft: ReportTemplateDraft
+    raw?: string
+    modelId?: string
+    generatedAt?: string
+  }
+}
+
 export interface ActivitySummary {
   organizationId: string
   range: {

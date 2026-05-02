@@ -11,6 +11,7 @@ import LoginPage from "@/routes/LoginPage"
 import OrganizationsPage from "@/routes/OrganizationsPage"
 import DemeterQueuePage from "@/routes/DemeterQueuePage"
 import ReportQueuePage from "@/routes/ReportQueuePage"
+import ReportTemplatesPage from "@/routes/ReportTemplatesPage"
 import PerformancePage from "@/routes/PerformancePage"
 import ResetPasswordPage from "@/routes/ResetPasswordPage"
 import UserSettingsPage from "@/routes/UserSettingsPage"
@@ -80,6 +81,7 @@ export default function App() {
         <Route path="/users" element={<UsersPage />} />
         <Route path="/users/:id/settings" element={<UserSettingsPage />} />
         <Route path="/activity" element={<ActivityPage />} />
+        <Route path="/report-templates" element={<ReportTemplatesPage />} />
         <Route
           path="/performance"
           element={
