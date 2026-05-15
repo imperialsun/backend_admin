@@ -92,7 +92,7 @@ export interface UserSettingsEnvelope {
   settings: Record<string, unknown>
 }
 
-export type ReportTemplateBaseFormat = "CRI" | "CRO" | "CRS" | "CRN"
+export type ReportTemplateBaseFormat = "CUSTOM" | "CRI" | "CRO" | "CRS" | "CRN"
 
 export interface OrganizationReportTemplate {
   id: string

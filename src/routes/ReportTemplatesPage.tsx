@@ -22,12 +22,13 @@ import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { Textarea } from "@/components/ui/textarea"
 
-const BASE_FORMATS: ReportTemplateBaseFormat[] = ["CRI", "CRO", "CRS", "CRN"]
+const BASE_FORMATS: ReportTemplateBaseFormat[] = ["CUSTOM", "CRI", "CRO", "CRS", "CRN"]
+const BUILT_IN_BASE_FORMATS: ReportTemplateBaseFormat[] = ["CRI", "CRO", "CRS", "CRN"]
 
 const emptyDraft: ReportTemplateInput = {
   name: "",
   description: "",
-  baseFormat: "CRI",
+  baseFormat: "CUSTOM",
   instructions: "",
   exampleOutline: "",
   orgEnabled: true,
@@ -42,13 +43,17 @@ const emptyAiDraft: ReportTemplateDraftOperationInput = {
 
 function buildPromptPreview(draft: ReportTemplateInput) {
   return [
-    `Format de base: ${draft.baseFormat}`,
+    draft.baseFormat === "CUSTOM" ? "Mode: modèle libre" : `Format de base: ${draft.baseFormat}`,
     `Nom du modèle: ${draft.name || "Nouveau modèle"}`,
     "",
     "Consignes spécifiques:",
     draft.instructions || "Décrivez l'objectif, les rubriques attendues, le style et les contraintes.",
     draft.exampleOutline ? `\nStructure attendue:\n${draft.exampleOutline}` : "",
   ].join("\n")
+}
+
+function buildTemplateFormatLabel(format: ReportTemplateBaseFormat) {
+  return format === "CUSTOM" ? "Libre" : format
 }
 
 export default function ReportTemplatesPage() {
@@ -235,15 +240,15 @@ export default function ReportTemplatesPage() {
                 </div>
                 <div className="grid gap-3 md:grid-cols-2">
                   <div className="space-y-2">
-                    <Label htmlFor="report-template-ai-format">Format de base optionnel</Label>
+                    <Label htmlFor="report-template-ai-format">Mode de brouillon optionnel</Label>
                     <select
                       id="report-template-ai-format"
                       className="h-10 w-full rounded-md border bg-background px-3 text-sm"
                       value={aiDraft.baseFormatHint}
                       onChange={(event) => setAiDraft({ ...aiDraft, baseFormatHint: event.target.value as ReportTemplateBaseFormat | "" })}
                     >
-                      <option value="">IA choisit</option>
-                      {BASE_FORMATS.map((format) => (
+                      <option value="">Modèle libre</option>
+                      {BUILT_IN_BASE_FORMATS.map((format) => (
                         <option key={format} value={format}>
                           {format}
                         </option>
@@ -298,7 +303,7 @@ export default function ReportTemplatesPage() {
                 <Input id="report-template-name" value={draft.name} onChange={(event) => setDraft({ ...draft, name: event.target.value })} />
               </div>
               <div className="space-y-2">
-                <Label htmlFor="report-template-format">Format de base</Label>
+                <Label htmlFor="report-template-format">Mode du modèle</Label>
                 <select
                   id="report-template-format"
                   className="h-10 w-full rounded-md border bg-background px-3 text-sm"
@@ -307,7 +312,7 @@ export default function ReportTemplatesPage() {
                 >
                   {BASE_FORMATS.map((format) => (
                     <option key={format} value={format}>
-                      {format}
+                      {format === "CUSTOM" ? "Libre" : format}
                     </option>
                   ))}
                 </select>
@@ -381,7 +386,7 @@ export default function ReportTemplatesPage() {
               </CardHeader>
               <CardContent className="space-y-3 text-sm">
                 <div className="flex flex-wrap gap-2">
-                  <Badge variant="default">{template.baseFormat}</Badge>
+                  <Badge variant="default">{buildTemplateFormatLabel(template.baseFormat)}</Badge>
                   <Badge variant="muted">Maj {formatDateTime(template.updatedAt)}</Badge>
                 </div>
                 <p className="line-clamp-3 text-muted-foreground">{template.instructions}</p>
