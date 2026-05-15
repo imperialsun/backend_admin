@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from "react"
+import { useEffect, useMemo, useRef, useState } from "react"
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query"
 import { ChevronDown, ChevronUp, FileSliders, WandSparkles } from "lucide-react"
 
@@ -66,6 +66,7 @@ export default function ReportTemplatesPage() {
   const [aiSectionsText, setAiSectionsText] = useState("")
   const [aiOperationId, setAiOperationId] = useState("")
   const [aiAssistantOpen, setAiAssistantOpen] = useState(true)
+  const appliedAiOperationIdRef = useRef("")
 
   const organizationsQuery = useQuery({
     queryKey: ["organizations"],
@@ -122,18 +123,26 @@ export default function ReportTemplatesPage() {
   })
 
   useEffect(() => {
-    const response = aiOperationQuery.data?.response
-    if (aiOperationQuery.data?.status !== "completed" || response?.kind !== "report_template_draft") {
+    const operation = aiOperationQuery.data
+    const response = operation?.response
+    if (
+      operation?.status !== "completed" ||
+      response?.kind !== "report_template_draft" ||
+      appliedAiOperationIdRef.current === operation.operationId
+    ) {
       return
     }
-    setEditingId(null)
-    setDraft({
-      name: response.draft.name,
-      description: response.draft.description,
-      baseFormat: response.draft.baseFormat,
-      instructions: response.draft.instructions,
-      exampleOutline: response.draft.exampleOutline,
-      orgEnabled: true,
+    appliedAiOperationIdRef.current = operation.operationId
+    queueMicrotask(() => {
+      setEditingId(null)
+      setDraft({
+        name: response.draft.name,
+        description: response.draft.description,
+        baseFormat: response.draft.baseFormat,
+        instructions: response.draft.instructions,
+        exampleOutline: response.draft.exampleOutline,
+        orgEnabled: true,
+      })
     })
   }, [aiOperationQuery.data])
 
