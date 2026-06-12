@@ -1,4 +1,4 @@
-import { screen, waitFor } from "@testing-library/react"
+import { fireEvent, screen, waitFor } from "@testing-library/react"
 import userEvent from "@testing-library/user-event"
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest"
 
@@ -69,20 +69,28 @@ class MockWebSocket {
 const reportSnapshot = {
   settings: {
     parallelism: 2,
+    crnParallelism: 1,
     updatedAt: "2026-04-23T16:00:00Z",
   },
   summary: {
     parallelism: 2,
+    crnParallelism: 1,
     openWorkers: 1,
     drainingWorkers: 0,
     coolingWorkers: 0,
     pendingOperations: 1,
     runningOperations: 0,
     unassignedOperations: 0,
+    retryPaused: true,
+    retryPausedLaneId: 1,
+    retryPausedOperationId: "report-1",
+    retryPausedFormatIndex: 2,
+    retryPausedSince: "2026-04-23T16:02:00Z",
   },
   workers: [
     {
       queueId: 1,
+      kind: "standard",
       open: true,
       draining: false,
       workerRunning: true,
@@ -95,6 +103,24 @@ const reportSnapshot = {
       currentFormatIndex: 0,
       currentFormatCount: 1,
       currentProgress: 0.5,
+      lastError: "",
+      cooldownUntil: "",
+    },
+    {
+      queueId: 2,
+      kind: "crn",
+      open: true,
+      draining: false,
+      workerRunning: true,
+      load: 0,
+      pendingCount: 0,
+      runningCount: 0,
+      currentOperationId: "",
+      currentStatus: "",
+      currentStage: "",
+      currentFormatIndex: 0,
+      currentFormatCount: 0,
+      currentProgress: 0,
       lastError: "",
       cooldownUntil: "",
     },
@@ -164,5 +190,42 @@ describe("ReportQueuePage", () => {
     MockWebSocket.instances[0].open()
 
     await waitFor(() => expect(MockWebSocket.instances.length).toBeGreaterThan(0))
+  })
+
+  it("updates standard and CRN lane parallelism together", async () => {
+    const user = userEvent.setup()
+    fetchDemeterReportQueueSnapshot.mockResolvedValue(reportSnapshot)
+    updateDemeterReportQueueSettings.mockResolvedValue({
+      ...reportSnapshot,
+      settings: { ...reportSnapshot.settings, parallelism: 3, crnParallelism: 2 },
+      summary: { ...reportSnapshot.summary, parallelism: 3, crnParallelism: 2 },
+    })
+
+    renderWithProviders(<ReportQueuePage />, { route: "/report-queue" })
+
+    await screen.findByText("Réglages")
+    const standardInput = screen.getByLabelText("Workers standards") as HTMLInputElement
+    const crnInput = screen.getByLabelText("Workers CRN dédiés") as HTMLInputElement
+    await waitFor(() => expect(standardInput.value).toBe("2"))
+    fireEvent.change(standardInput, { target: { value: "3" } })
+    fireEvent.change(crnInput, { target: { value: "2" } })
+    await user.click(screen.getByRole("button", { name: "Appliquer" }))
+
+    expect(updateDemeterReportQueueSettings).toHaveBeenCalledWith({ parallelism: 3, crnParallelism: 2 })
+    expect(await screen.findByText("Les parallélismes ont été enregistrés et les lanes ont été recalculées")).toBeInTheDocument()
+  })
+
+  it("shows the retry pause banner and blocked lane badges", async () => {
+    fetchDemeterReportQueueSnapshot.mockResolvedValue(reportSnapshot)
+
+    renderWithProviders(<ReportQueuePage />, { route: "/report-queue" })
+
+    expect(await screen.findByText("Pause globale Mistral")).toBeInTheDocument()
+    expect(screen.getByText("La file rapport attend la reprise du retry en cours")).toBeInTheDocument()
+    expect(screen.getByText("Bloque toutes les lanes")).toBeInTheDocument()
+    expect(screen.getAllByText("Lane #1").length).toBeGreaterThan(0)
+    expect(screen.getAllByText("report-1").length).toBeGreaterThan(0)
+    expect(screen.getByText("Retry actif")).toBeInTheDocument()
+    expect(screen.getByText("Bloqué par retry")).toBeInTheDocument()
   })
 })

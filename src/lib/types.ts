@@ -330,11 +330,13 @@ export interface DemeterQueueSnapshot {
 
 export interface DemeterReportQueueSettingsSnapshot {
   parallelism: number
+  crnParallelism: number
   updatedAt: string
 }
 
 export interface DemeterReportQueueSummarySnapshot {
   parallelism: number
+  crnParallelism: number
   openWorkers: number
   drainingWorkers: number
   coolingWorkers: number
@@ -350,6 +352,7 @@ export interface DemeterReportQueueSummarySnapshot {
 
 export interface DemeterReportQueueWorkerSnapshot {
   queueId: number
+  kind?: "standard" | "crn" | string
   open: boolean
   draining: boolean
   workerRunning: boolean

@@ -1,4 +1,4 @@
-import { useMemo, useState } from "react"
+import { useEffect, useMemo, useState } from "react"
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query"
 import { RefreshCcw, Save, Server, Trash2, Waves } from "lucide-react"
 
@@ -13,7 +13,11 @@ import {
   purgeDemeterReportQueueOperations,
   updateDemeterReportQueueSettings,
 } from "@/lib/admin-client"
-import type { DemeterReportQueueOperationSnapshot, DemeterReportQueueSnapshot } from "@/lib/types"
+import type {
+  DemeterReportQueueOperationSnapshot,
+  DemeterReportQueueSnapshot,
+  DemeterReportQueueSummarySnapshot,
+} from "@/lib/types"
 import { useDemeterReportQueueWebSocket } from "@/lib/use-demeter-report-queue-websocket"
 import { formatDateTime } from "@/lib/utils"
 
@@ -50,6 +54,10 @@ function laneStateLabel(worker: DemeterReportQueueSnapshot["workers"][number]) {
   return "Ouverte"
 }
 
+function laneKindLabel(worker: DemeterReportQueueSnapshot["workers"][number]) {
+  return worker.kind === "crn" ? "CRN dédié" : "Standard"
+}
+
 function formatProgress(value: number) {
   if (!Number.isFinite(value) || value <= 0) {
     return "0 %"
@@ -81,6 +89,50 @@ function QueueStatCard({ label, value, helper }: { label: string; value: string 
   )
 }
 
+function RetryPauseBanner({ summary }: { summary?: DemeterReportQueueSummarySnapshot }) {
+  if (!summary?.retryPaused) {
+    return null
+  }
+
+  const pausedFormatIndex = summary.retryPausedFormatIndex ?? -1
+  const formatLabel = pausedFormatIndex >= 0 ? pausedFormatIndex + 1 : 0
+
+  return (
+    <Card className="border-amber-500/25 bg-amber-500/5">
+      <CardHeader className="space-y-3">
+        <div className="flex flex-wrap items-start justify-between gap-3">
+          <div>
+            <CardDescription>Pause globale Mistral</CardDescription>
+            <CardTitle className="text-xl">La file rapport attend la reprise du retry en cours</CardTitle>
+          </div>
+          <Badge variant="danger">Bloque toutes les lanes</Badge>
+        </div>
+        <CardDescription>
+          Quand une génération de CR passe en retry Mistral, les autres workers se figent jusqu&apos;à la fin de cette tentative.
+        </CardDescription>
+      </CardHeader>
+      <CardContent className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
+        <div className="rounded-2xl border border-border/70 bg-background/80 p-4">
+          <p className="text-xs uppercase tracking-[0.18em] text-muted-foreground">Lane concernée</p>
+          <p className="mt-2 text-sm font-medium">Lane #{summary.retryPausedLaneId || "—"}</p>
+        </div>
+        <div className="rounded-2xl border border-border/70 bg-background/80 p-4">
+          <p className="text-xs uppercase tracking-[0.18em] text-muted-foreground">Opération</p>
+          <p className="mt-2 break-words text-sm font-medium">{summary.retryPausedOperationId || "—"}</p>
+        </div>
+        <div className="rounded-2xl border border-border/70 bg-background/80 p-4">
+          <p className="text-xs uppercase tracking-[0.18em] text-muted-foreground">Format</p>
+          <p className="mt-2 text-sm font-medium">{formatLabel || "—"}</p>
+        </div>
+        <div className="rounded-2xl border border-border/70 bg-background/80 p-4">
+          <p className="text-xs uppercase tracking-[0.18em] text-muted-foreground">Depuis</p>
+          <p className="mt-2 text-sm font-medium">{summary.retryPausedSince ? formatDateTime(summary.retryPausedSince) : "—"}</p>
+        </div>
+      </CardContent>
+    </Card>
+  )
+}
+
 function OperationRow({ operation }: { operation: DemeterReportQueueOperationSnapshot }) {
   return (
     <tr className="border-b border-border/60 text-sm">
@@ -105,6 +157,7 @@ export default function ReportQueuePage() {
   const queryClient = useQueryClient()
   const queueQueryKey = ["demeter-report-queue", QUEUE_SNAPSHOT_LIMIT] as const
   const [parallelism, setParallelism] = useState<number>(1)
+  const [crnParallelism, setCrnParallelism] = useState<number>(1)
   const [parallelismError, setParallelismError] = useState<string | null>(null)
   const [parallelismSuccess, setParallelismSuccess] = useState<string | null>(null)
   const [purgeCompletedConfirmationOpen, setPurgeCompletedConfirmationOpen] = useState(false)
@@ -128,16 +181,17 @@ export default function ReportQueuePage() {
   })
 
   const settingsMutation = useMutation({
-    mutationFn: async (nextParallelism: number) => {
+    mutationFn: async (next: { parallelism: number; crnParallelism: number }) => {
       if (queueWebSocket.isAuthenticated) {
-        return queueWebSocket.updateSettings({ parallelism: nextParallelism })
+        return queueWebSocket.updateSettings(next)
       }
-      return updateDemeterReportQueueSettings({ parallelism: nextParallelism })
+      return updateDemeterReportQueueSettings(next)
     },
     onSuccess: (snapshot) => {
       queryClient.setQueryData(queueQueryKey, snapshot)
       setParallelism(snapshot.settings.parallelism)
-      setParallelismSuccess("Le parallélisme a été enregistré et les lanes ont été recalculées")
+      setCrnParallelism(snapshot.settings.crnParallelism)
+      setParallelismSuccess("Les parallélismes ont été enregistrés et les lanes ont été recalculées")
       setParallelismError(null)
     },
     onError: (error) => {
@@ -169,6 +223,14 @@ export default function ReportQueuePage() {
   const snapshot = queueQuery.data
   const summary = snapshot?.summary
 
+  useEffect(() => {
+    if (!snapshot?.settings || settingsMutation.isPending) {
+      return
+    }
+    setParallelism(snapshot.settings.parallelism)
+    setCrnParallelism(snapshot.settings.crnParallelism)
+  }, [settingsMutation.isPending, snapshot?.settings])
+
   const workers = useMemo(() => snapshot?.workers ?? [], [snapshot])
   const operations = useMemo(() => snapshot?.operations ?? [], [snapshot])
 
@@ -195,6 +257,7 @@ export default function ReportQueuePage() {
 
       <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-3">
         <QueueStatCard label="Parallélisme" value={summary?.parallelism ?? "—"} helper="Nombre de lanes actives configurées" />
+        <QueueStatCard label="Lanes CRN" value={summary?.crnParallelism ?? "—"} helper="Workers dédiés aux paquets CRN" />
         <QueueStatCard label="Workers ouverts" value={summary?.openWorkers ?? "—"} helper="Lanes capables d’accepter de nouvelles opérations" />
         <QueueStatCard label="En attente" value={summary?.pendingOperations ?? "—"} helper="Opérations en file non claimées" />
         <QueueStatCard label="En cours" value={summary?.runningOperations ?? "—"} helper="Opérations actuellement exécutées" />
@@ -202,32 +265,48 @@ export default function ReportQueuePage() {
         <QueueStatCard label="Sans queue" value={summary?.unassignedOperations ?? "—"} helper="Opérations à réaffecter après reconciliation" />
       </div>
 
+      <RetryPauseBanner summary={summary} />
+
       <Card>
         <CardHeader>
           <CardTitle className="flex items-center gap-2">
             <Server className="h-4 w-4" />
             Réglages
           </CardTitle>
-          <CardDescription>Parallélisme séparé de la queue transcription, avec mêmes bornes (0-8).</CardDescription>
+          <CardDescription>Parallélisme séparé de la queue transcription, avec un pool CRN dédié (0-8).</CardDescription>
         </CardHeader>
         <CardContent className="space-y-4">
-          <div className="grid gap-2 max-w-xs">
-            <Label htmlFor="report-queue-parallelism">Workers parallèles</Label>
-            <Input
-              id="report-queue-parallelism"
-              type="number"
-              min={0}
-              max={MAX_PARALLELISM}
-              step={1}
-              value={parallelism}
-              onChange={(event) => setParallelism(Number(event.target.value))}
-            />
+          <div className="grid gap-4 md:grid-cols-2">
+            <div className="grid gap-2 max-w-xs">
+              <Label htmlFor="report-queue-parallelism">Workers standards</Label>
+              <Input
+                id="report-queue-parallelism"
+                type="number"
+                min={0}
+                max={MAX_PARALLELISM}
+                step={1}
+                value={parallelism}
+                onChange={(event) => setParallelism(Number(event.target.value))}
+              />
+            </div>
+            <div className="grid gap-2 max-w-xs">
+              <Label htmlFor="report-queue-crn-parallelism">Workers CRN dédiés</Label>
+              <Input
+                id="report-queue-crn-parallelism"
+                type="number"
+                min={0}
+                max={MAX_PARALLELISM}
+                step={1}
+                value={crnParallelism}
+                onChange={(event) => setCrnParallelism(Number(event.target.value))}
+              />
+            </div>
           </div>
           <Button
             onClick={() => {
               setParallelismSuccess(null)
               setParallelismError(null)
-              settingsMutation.mutate(parallelism)
+              settingsMutation.mutate({ parallelism, crnParallelism })
             }}
             disabled={settingsMutation.isPending}
           >
@@ -341,7 +420,15 @@ export default function ReportQueuePage() {
               <CardHeader>
                 <div className="flex items-center justify-between gap-2">
                   <CardTitle className="text-base">Lane #{worker.queueId}</CardTitle>
-                  <Badge variant={laneStateVariant(worker)}>{laneStateLabel(worker)}</Badge>
+                  <div className="flex flex-wrap justify-end gap-2">
+                    <Badge variant="muted">{laneKindLabel(worker)}</Badge>
+                    <Badge variant={laneStateVariant(worker)}>{laneStateLabel(worker)}</Badge>
+                    {summary?.retryPaused ? (
+                      <Badge variant={summary.retryPausedLaneId === worker.queueId ? "success" : "danger"}>
+                        {summary.retryPausedLaneId === worker.queueId ? "Retry actif" : "Bloqué par retry"}
+                      </Badge>
+                    ) : null}
+                  </div>
                 </div>
                 <CardDescription>
                   Charge {worker.load} · pending {worker.pendingCount} · running {worker.runningCount}

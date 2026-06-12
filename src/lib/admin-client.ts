@@ -74,6 +74,7 @@ type PerformanceSummaryInput = {
 
 type DemeterQueueSettingsInput = {
   parallelism: number
+  crnParallelism?: number
 }
 
 type DemeterQueuePurgeScope = "completed" | "all"

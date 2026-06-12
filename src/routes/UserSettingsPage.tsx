@@ -24,7 +24,7 @@ const TEXT_FIELDS = [
   { key: "cloudMistralModel", label: "Modèle Mistral", placeholder: "voxtral-mini-latest" },
   { key: "cloudDemeterModel", label: "Modèle Demeter", placeholder: "voxtral-mini-latest" },
   { key: "llmApiHfModelId", label: "Model ID Hugging Face", placeholder: "openai/gpt-oss-20b" },
-  { key: "llmApiMistralModelId", label: "Model ID Mistral", placeholder: "mistral-medium-latest" },
+  { key: "llmApiMistralModelId", label: "Model ID Mistral", placeholder: "mistral-large-2512" },
   { key: "llmLocalModelId", label: "Model ID LLM local", placeholder: "onnx-community/Qwen3-1.7B-ONNX" },
 ] as const
 

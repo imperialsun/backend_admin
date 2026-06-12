@@ -211,7 +211,7 @@ export function useDemeterReportQueueWebSocket({
     }
   }, [limit])
 
-  const updateSettings = useCallback((input: { parallelism: number }) => {
+  const updateSettings = useCallback((input: { parallelism: number; crnParallelism?: number }) => {
     const socket = socketRef.current
     if (!socket || socket.readyState !== WebSocket.OPEN || !authenticatedRef.current) {
       return Promise.reject(new Error("websocket unavailable"))
