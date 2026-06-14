@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from "react"
+import { useMemo, useState } from "react"
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query"
 import { RefreshCcw, Save, Server, Trash2, Waves } from "lucide-react"
 
@@ -25,6 +25,7 @@ const QUEUE_SNAPSHOT_LIMIT = 500
 const MAX_PARALLELISM = 8
 
 type QueuePurgeScope = "completed" | "all"
+type QueueSettingsDraft = { parallelism: number; crnParallelism: number }
 
 function statusBadgeVariant(status: string) {
   switch (status.trim().toLowerCase()) {
@@ -156,8 +157,7 @@ function OperationRow({ operation }: { operation: DemeterReportQueueOperationSna
 export default function ReportQueuePage() {
   const queryClient = useQueryClient()
   const queueQueryKey = ["demeter-report-queue", QUEUE_SNAPSHOT_LIMIT] as const
-  const [parallelism, setParallelism] = useState<number>(1)
-  const [crnParallelism, setCrnParallelism] = useState<number>(1)
+  const [settingsDraft, setSettingsDraft] = useState<QueueSettingsDraft | null>(null)
   const [parallelismError, setParallelismError] = useState<string | null>(null)
   const [parallelismSuccess, setParallelismSuccess] = useState<string | null>(null)
   const [purgeCompletedConfirmationOpen, setPurgeCompletedConfirmationOpen] = useState(false)
@@ -189,8 +189,7 @@ export default function ReportQueuePage() {
     },
     onSuccess: (snapshot) => {
       queryClient.setQueryData(queueQueryKey, snapshot)
-      setParallelism(snapshot.settings.parallelism)
-      setCrnParallelism(snapshot.settings.crnParallelism)
+      setSettingsDraft(null)
       setParallelismSuccess("Les parallélismes ont été enregistrés et les lanes ont été recalculées")
       setParallelismError(null)
     },
@@ -222,14 +221,8 @@ export default function ReportQueuePage() {
 
   const snapshot = queueQuery.data
   const summary = snapshot?.summary
-
-  useEffect(() => {
-    if (!snapshot?.settings || settingsMutation.isPending) {
-      return
-    }
-    setParallelism(snapshot.settings.parallelism)
-    setCrnParallelism(snapshot.settings.crnParallelism)
-  }, [settingsMutation.isPending, snapshot?.settings])
+  const parallelism = settingsDraft?.parallelism ?? snapshot?.settings.parallelism ?? 1
+  const crnParallelism = settingsDraft?.crnParallelism ?? snapshot?.settings.crnParallelism ?? 1
 
   const workers = useMemo(() => snapshot?.workers ?? [], [snapshot])
   const operations = useMemo(() => snapshot?.operations ?? [], [snapshot])
@@ -286,7 +279,7 @@ export default function ReportQueuePage() {
                 max={MAX_PARALLELISM}
                 step={1}
                 value={parallelism}
-                onChange={(event) => setParallelism(Number(event.target.value))}
+                onChange={(event) => setSettingsDraft({ parallelism: Number(event.target.value), crnParallelism })}
               />
             </div>
             <div className="grid gap-2 max-w-xs">
@@ -298,7 +291,7 @@ export default function ReportQueuePage() {
                 max={MAX_PARALLELISM}
                 step={1}
                 value={crnParallelism}
-                onChange={(event) => setCrnParallelism(Number(event.target.value))}
+                onChange={(event) => setSettingsDraft({ parallelism, crnParallelism: Number(event.target.value) })}
               />
             </div>
           </div>

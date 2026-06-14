@@ -1,4 +1,4 @@
-FROM node:26.1.0-alpine3.23 AS build
+FROM node:26.3.0-alpine3.23 AS build
 
 WORKDIR /app
 
@@ -8,11 +8,11 @@ RUN npm ci
 COPY . .
 RUN npm run build
 
-FROM nginx:1.29.8-alpine3.23
+FROM nginx:1.31.1-alpine3.23
 
 ENV BACKEND_BASE_URL=http://localhost:8080/api/v1
 
-RUN apk add --no-cache --upgrade libexpat zlib xz-libs nghttp2-libs libxpm curl libcurl
+RUN apk add --no-cache --upgrade libexpat zlib xz-libs nghttp2-libs libxpm curl libcurl libxml2 libpng
 
 COPY docker/nginx/admin.conf /etc/nginx/conf.d/default.conf
 COPY docker/nginx/security-headers.inc /etc/nginx/conf.d/security-headers.inc
