@@ -8,7 +8,7 @@ RUN npm ci
 COPY . .
 RUN npm run build
 
-FROM nginx:1.31.1-alpine3.23
+FROM nginx:1.31.2-alpine3.23
 
 ENV BACKEND_BASE_URL=http://localhost:8080/api/v1
 
