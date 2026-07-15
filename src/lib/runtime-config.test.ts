@@ -22,6 +22,11 @@ describe("runtime-config", () => {
     expect(normalizeBackendBaseUrl("api/v1/")).toBe("/api/v1")
   })
 
+  it("rejects non-http and protocol-relative backend URLs", () => {
+    expect(normalizeBackendBaseUrl("javascript:alert(1)")).toBe("/api/v1")
+    expect(normalizeBackendBaseUrl("//attacker.example/api/v1")).toBe("/api/v1")
+  })
+
   it("normalizes the runtime config once before caching it", () => {
     resetRuntimeConfigForTests()
     window.__APP_RUNTIME_CONFIG__ = {

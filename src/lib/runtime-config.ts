@@ -21,8 +21,14 @@ export function normalizeBackendBaseUrl(backendBaseUrl: string) {
   if (!normalized) {
     return DEFAULT_BACKEND_BASE_PATH
   }
-  if (/^[a-z][a-z0-9+.-]*:\/\//i.test(normalized) || normalized.startsWith("/")) {
+  if (normalized.startsWith("/") && !normalized.startsWith("//")) {
     return normalized
+  }
+  if (/^https?:\/\//i.test(normalized)) {
+    return normalized
+  }
+  if (/^[a-z][a-z0-9+.-]*:/i.test(normalized) || normalized.startsWith("//")) {
+    return DEFAULT_BACKEND_BASE_PATH
   }
   return `/${normalized.replace(/^\/+/, "")}`
 }
